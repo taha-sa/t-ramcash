@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Win32;
 
 namespace TRamCash;
@@ -25,6 +27,12 @@ public class AppSettings
     public bool ShowCleanNotification { get; set; } = true;
     public bool IsDarkThemeEnabled { get; set; } = true;
 
+    /// <summary>Temizlikten haric tutulan surec adlari (.exe'siz).</summary>
+    public List<string> ExcludedProcesses { get; set; } = new();
+
+    /// <summary>Elle temizlik modu: "Smart" | "Full". Otomatik temizlik her zaman Akilli.</summary>
+    public string ManualMode { get; set; } = "Smart";
+
     public int WarningLevel { get; set; } = 60;
     public int DangerLevel { get; set; } = 80;
 
@@ -47,14 +55,14 @@ public class AppSettings
             if (File.Exists(ConfigPath))
             {
                 string json = File.ReadAllText(ConfigPath);
-                return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+                return JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings) ?? new AppSettings();
             }
 
             // 2. Yeni dosya yoksa, eski yoldan ayarları otomatik taşı (Migration)
             if (File.Exists(LegacyConfigPath))
             {
                 string json = File.ReadAllText(LegacyConfigPath);
-                var legacySettings = JsonSerializer.Deserialize<AppSettings>(json);
+                var legacySettings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings);
                 if (legacySettings != null)
                 {
                     legacySettings.Save(); // Yeni yola kaydet ve Registry'i güncelle
@@ -76,7 +84,7 @@ public class AppSettings
             {
                 Directory.CreateDirectory(ConfigDir);
             }
-            string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+            string json = JsonSerializer.Serialize(this, SettingsJsonContext.Default.AppSettings);
             File.WriteAllText(ConfigPath, json);
 
             // Startup registry check
@@ -101,3 +109,7 @@ public class AppSettings
         }
     }
 }
+
+[JsonSourceGenerationOptions(WriteIndented = true)]
+[JsonSerializable(typeof(AppSettings))]
+internal sealed partial class SettingsJsonContext : JsonSerializerContext { }

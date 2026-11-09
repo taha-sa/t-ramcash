@@ -1,15 +1,31 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using TSuite.Link;
 
 namespace TRamCash;
 
-public class MemoryCleaner
+public enum CleanMode { Smart, Full }
+
+public readonly record struct CleanStep(string Name, double FreedMb, long Ms, bool Ok);
+
+public sealed class CleanResult
+{
+    public double FreedMb { get; init; }
+    public long DurationMs { get; init; }
+    public CleanMode Mode { get; init; }
+    public List<CleanStep> PerStep { get; init; } = new();
+}
+
+public static class MemoryCleaner
 {
     #region Win32 / NT API Declarations
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    [StructLayout(LayoutKind.Sequential)]
     public struct MEMORYSTATUSEX
     {
         public uint dwLength;
@@ -21,13 +37,6 @@ public class MemoryCleaner
         public ulong ullTotalVirtual;
         public ulong ullAvailVirtual;
         public ulong ullAvailExtendedVirtual;
-
-        public static MEMORYSTATUSEX Create()
-        {
-            var res = new MEMORYSTATUSEX();
-            res.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
-            return res;
-        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -47,54 +56,57 @@ public class MemoryCleaner
         public uint HandleCount;
         public uint ProcessCount;
         public uint ThreadCount;
-
-        public static PERFORMANCE_INFORMATION Create()
-        {
-            var res = new PERFORMANCE_INFORMATION();
-            res.cb = (uint)Marshal.SizeOf(typeof(PERFORMANCE_INFORMATION));
-            return res;
-        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct LUID
-    {
-        public uint LowPart;
-        public int HighPart;
-    }
+    struct LUID { public uint LowPart; public int HighPart; }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct LUID_AND_ATTRIBUTES
-    {
-        public LUID Luid;
-        public uint Attributes;
-    }
+    struct LUID_AND_ATTRIBUTES { public LUID Luid; public uint Attributes; }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct TOKEN_PRIVILEGES
+    struct TOKEN_PRIVILEGES { public uint PrivilegeCount; public LUID_AND_ATTRIBUTES Privileges; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct MEMORY_COMBINE_INFORMATION_EX
     {
-        public uint PrivilegeCount;
-        public LUID_AND_ATTRIBUTES Privileges;
+        public IntPtr Handle;
+        public UIntPtr PagesCombined;
+        public uint Flags;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct PROCESSENTRY32
+    {
+        public uint dwSize;
+        public uint cntUsage;
+        public uint th32ProcessID;
+        public UIntPtr th32DefaultHeapID;
+        public uint th32ModuleID;
+        public uint cntThreads;
+        public uint th32ParentProcessID;
+        public int pcPriClassBase;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile;
     }
 
     const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
     const uint TOKEN_QUERY = 0x0008;
     const uint SE_PRIVILEGE_ENABLED = 0x00000002;
-
-    const uint PROCESS_QUERY_INFORMATION = 0x0400;
+    const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     const uint PROCESS_SET_QUOTA = 0x0100;
+    const uint TH32CS_SNAPPROCESS = 0x2;
 
-    const int SystemMemoryListInformation = 80; // 0x50
+    const int SystemMemoryListInformation = 80;
+    const int SystemCombinePhysicalMemoryInformation = 130;
+    const int SystemRegistryReconciliationInformation = 155;
 
-    public enum SYSTEM_MEMORY_LIST_COMMAND
+    enum MemoryCommand
     {
-        MemoryCaptureAccessedBits = 0,
-        MemoryCaptureAndResetAccessedBits = 1,
-        MemoryEmptyWorkingSets = 2,
-        MemoryFlushModifiedList = 3,
-        MemoryPurgeStandbyList = 4,
-        MemoryPurgeLowPriorityStandbyList = 5,
-        MemoryCommandMax = 6
+        EmptyWorkingSets = 2,
+        FlushModifiedList = 3,
+        PurgeStandbyList = 4,
+        PurgeLowPriorityStandbyList = 5,
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -109,7 +121,7 @@ public class MemoryCleaner
     static extern IntPtr GetCurrentProcess();
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+    static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -119,11 +131,32 @@ public class MemoryCleaner
     [return: MarshalAs(UnmanagedType.Bool)]
     static extern bool EmptyWorkingSet(IntPtr hProcess);
 
-    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool Process32FirstW(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool Process32NextW(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool SetSystemFileCacheSize(UIntPtr min, UIntPtr max, uint flags);
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
 
-    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     static extern bool LookupPrivilegeValue(string lpSystemName, string lpName, out LUID lpLuid);
 
@@ -134,6 +167,12 @@ public class MemoryCleaner
 
     [DllImport("ntdll.dll")]
     static extern int NtSetSystemInformation(int SystemInformationClass, ref int SystemInformation, int SystemInformationLength);
+
+    [DllImport("ntdll.dll")]
+    static extern int NtSetSystemInformation(int SystemInformationClass, ref MEMORY_COMBINE_INFORMATION_EX SystemInformation, int SystemInformationLength);
+
+    [DllImport("ntdll.dll")]
+    static extern int NtSetSystemInformation(int SystemInformationClass, IntPtr SystemInformation, int SystemInformationLength);
 
     #endregion
 
@@ -161,11 +200,10 @@ public class MemoryCleaner
 
     public static bool IsAdministrator { get; } = CheckIsAdministrator();
 
-    public static MemorySnapshot GetSnapshot()
+    /// <summary>Heap tahsisi yapmadan anlik bellek durumunu doldurur (tick basina sifir allocation).</summary>
+    public static void ReadSnapshot(ref MemorySnapshot snap)
     {
-        var snap = new MemorySnapshot();
-
-        var mem = MEMORYSTATUSEX.Create();
+        var mem = new MEMORYSTATUSEX { dwLength = (uint)Unsafe.SizeOf<MEMORYSTATUSEX>() };
         if (GlobalMemoryStatusEx(ref mem))
         {
             snap.TotalPhysicalBytes = mem.ullTotalPhys;
@@ -176,12 +214,12 @@ public class MemoryCleaner
             snap.TotalPageFileBytes = mem.ullTotalPageFile;
             snap.AvailablePageFileBytes = mem.ullAvailPageFile;
             snap.UsedPageFileBytes = mem.ullTotalPageFile > mem.ullAvailPageFile ? mem.ullTotalPageFile - mem.ullAvailPageFile : 0;
-            snap.PageFileLoadPercent = snap.TotalPageFileBytes > 0 
-                ? (uint)((snap.UsedPageFileBytes * 100) / snap.TotalPageFileBytes) 
+            snap.PageFileLoadPercent = snap.TotalPageFileBytes > 0
+                ? (uint)((snap.UsedPageFileBytes * 100) / snap.TotalPageFileBytes)
                 : 0;
         }
 
-        var perf = PERFORMANCE_INFORMATION.Create();
+        var perf = new PERFORMANCE_INFORMATION { cb = (uint)Unsafe.SizeOf<PERFORMANCE_INFORMATION>() };
         if (GetPerformanceInfo(ref perf, perf.cb))
         {
             ulong pageSize = perf.PageSize.ToUInt64();
@@ -196,114 +234,170 @@ public class MemoryCleaner
             snap.ThreadCount = perf.ThreadCount;
             snap.HandleCount = perf.HandleCount;
         }
-
-        return snap;
     }
 
-    public static double Clean(AppSettings settings)
+    public static MemorySnapshot GetSnapshot()
     {
-        var before = GetSnapshot();
+        var s = new MemorySnapshot();
+        ReadSnapshot(ref s);
+        return s;
+    }
 
-        // Ayrıcalıkları yükselt
+    static ulong AvailPhys()
+    {
+        var mem = new MEMORYSTATUSEX { dwLength = (uint)Unsafe.SizeOf<MEMORYSTATUSEX>() };
+        return GlobalMemoryStatusEx(ref mem) ? mem.ullAvailPhys : 0;
+    }
+
+    /// <summary>
+    /// Akilli: dusuk oncelikli standby + (haric tutulmayan) surec working set'leri + combine page lists.
+    /// Tam: yukaridakilerin hepsi + sistem WS + modified list + tam standby + dosya onbellegi + registry reconciliation.
+    /// Tam modda sistem duzeyi adimlar ayarlardaki isaretlere de saygi duyar.
+    /// </summary>
+    public static CleanResult Clean(AppSettings settings, CleanMode mode)
+    {
+        var sw = Stopwatch.StartNew();
+        ulong before = AvailPhys();
+        var steps = new List<CleanStep>(8);
+        bool full = mode == CleanMode.Full;
+
         EnablePrivilege("SeProfileSingleProcessPrivilege");
         EnablePrivilege("SeIncreaseQuotaPrivilege");
         EnablePrivilege("SeDebugPrivilege");
 
-        // 1. Süreç çalışma kümeleri
-        if (settings.CleanProcessWorkingSets)
+        void Step(string name, Func<bool> action)
         {
-            CleanAllProcessWorkingSets();
+            ulong a = AvailPhys();
+            long t0 = sw.ElapsedMilliseconds;
+            bool ok;
+            try { ok = action(); } catch { ok = false; }
+            ulong b = AvailPhys();
+            steps.Add(new CleanStep(name, ((long)b - (long)a) / 1048576.0, sw.ElapsedMilliseconds - t0, ok));
         }
 
-        // 2. Sistem çalışma kümesi
-        if (settings.CleanSystemWorkingSet)
-        {
-            int cmd = (int)SYSTEM_MEMORY_LIST_COMMAND.MemoryEmptyWorkingSets;
-            NtSetSystemInformation(SystemMemoryListInformation, ref cmd, sizeof(int));
-        }
+        if (!full || settings.CleanProcessWorkingSets)
+            Step("Süreç çalışma kümeleri", () => { EmptyProcessWorkingSets(settings); return true; });
 
-        // 3. Değiştirilmiş sayfalar (Modified list)
-        if (settings.CleanModifiedPageList)
-        {
-            int cmd = (int)SYSTEM_MEMORY_LIST_COMMAND.MemoryFlushModifiedList;
-            NtSetSystemInformation(SystemMemoryListInformation, ref cmd, sizeof(int));
-        }
+        if (full && settings.CleanSystemWorkingSet)
+            Step("Sistem çalışma kümesi", () => NtMemCmd(MemoryCommand.EmptyWorkingSets));
 
-        // 4. Bekleme listesi (Standby list)
-        if (settings.CleanStandbyList)
-        {
-            int cmd = (int)SYSTEM_MEMORY_LIST_COMMAND.MemoryPurgeStandbyList;
-            NtSetSystemInformation(SystemMemoryListInformation, ref cmd, sizeof(int));
-        }
+        if (full && settings.CleanModifiedPageList)
+            Step("Değiştirilmiş sayfalar", () => NtMemCmd(MemoryCommand.FlushModifiedList));
 
-        // 5. Düşük öncelikli bekleme listesi
-        if (settings.CleanStandbyLowPriority)
-        {
-            int cmd = (int)SYSTEM_MEMORY_LIST_COMMAND.MemoryPurgeLowPriorityStandbyList;
-            NtSetSystemInformation(SystemMemoryListInformation, ref cmd, sizeof(int));
-        }
+        if (full && settings.CleanStandbyList)
+            Step("Bekleme listesi", () => NtMemCmd(MemoryCommand.PurgeStandbyList));
 
-        var after = GetSnapshot();
-        long diff = (long)after.AvailablePhysicalBytes - (long)before.AvailablePhysicalBytes;
-        return Math.Max(0, diff / (1024.0 * 1024.0)); // MB cinsinden
+        if (!full || settings.CleanStandbyLowPriority)
+            Step("Düşük öncelikli bekleme", () => NtMemCmd(MemoryCommand.PurgeLowPriorityStandbyList));
+
+        if (full)
+            Step("Sistem dosya önbelleği", () => SetSystemFileCacheSize(UIntPtr.MaxValue, UIntPtr.MaxValue, 0));
+
+        if (Environment.OSVersion.Version.Build >= 9600) // Win 8.1+
+            Step("Sayfa birleştirme", CombinePageLists);
+
+        if (full && Environment.OSVersion.Version.Build >= 17134) // Win10 1803+
+            Step("Registry önbelleği", () => NtSetSystemInformation(SystemRegistryReconciliationInformation, IntPtr.Zero, 0) >= 0);
+
+        ulong after = AvailPhys();
+        return new CleanResult
+        {
+            FreedMb = Math.Max(0, ((long)after - (long)before) / 1048576.0),
+            DurationMs = sw.ElapsedMilliseconds,
+            Mode = mode,
+            PerStep = steps
+        };
     }
 
-    static void CleanAllProcessWorkingSets()
+    static bool NtMemCmd(MemoryCommand cmd)
     {
-        var procs = Process.GetProcesses();
-        int currentPid = Environment.ProcessId;
+        int c = (int)cmd;
+        return NtSetSystemInformation(SystemMemoryListInformation, ref c, sizeof(int)) >= 0;
+    }
 
-        foreach (var p in procs)
+    static bool CombinePageLists()
+    {
+        var info = new MEMORY_COMBINE_INFORMATION_EX();
+        return NtSetSystemInformation(SystemCombinePhysicalMemoryInformation, ref info, Unsafe.SizeOf<MEMORY_COMBINE_INFORMATION_EX>()) >= 0;
+    }
+
+    /// <summary>Hic hariç tutulmayan sürecler: kendimiz, ön plan, T-Suite uygulamaları, ayardaki hariç listesi, PID &lt;= 4.</summary>
+    static HashSet<string> BuildExcludedNames(AppSettings settings, out HashSet<uint> excludedPids)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        excludedPids = new HashSet<uint> { (uint)Environment.ProcessId };
+
+        if (settings.ExcludedProcesses != null)
+            foreach (var n in settings.ExcludedProcesses) names.Add(NormalizeName(n));
+
+        try
         {
-            try
+            foreach (var m in new AppRegistry().ReadAll())
             {
-                // Sistem, boşta (Idle) ve kendi sürecimizi atla
-                if (p.Id <= 4 || p.Id == currentPid)
-                    continue;
-
-                IntPtr hProcess = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION, false, p.Id);
-                if (hProcess != IntPtr.Zero)
-                {
-                    EmptyWorkingSet(hProcess);
-                    CloseHandle(hProcess);
-                }
-            }
-            catch
-            {
-            }
-            finally
-            {
-                p.Dispose();
+                if (!string.IsNullOrEmpty(m.ExePath)) names.Add(Path.GetFileNameWithoutExtension(m.ExePath));
+                if (m.Pid > 0) excludedPids.Add((uint)m.Pid);
             }
         }
+        catch { }
+
+        try
+        {
+            IntPtr fg = GetForegroundWindow();
+            if (fg != IntPtr.Zero && GetWindowThreadProcessId(fg, out uint fgPid) != 0 && fgPid != 0)
+                excludedPids.Add(fgPid);
+        }
+        catch { }
+        return names;
+    }
+
+    public static string NormalizeName(string n)
+    {
+        n = (n ?? "").Trim();
+        return n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? n[..^4] : n;
+    }
+
+    /// <summary>Toolhelp ile süreçleri sayar (Process nesnesi üretmez), her tutamaç finally'de kapatılır.</summary>
+    static void EmptyProcessWorkingSets(AppSettings settings)
+    {
+        var excludedNames = BuildExcludedNames(settings, out var excludedPids);
+        IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (snap == IntPtr.Zero || snap == new IntPtr(-1)) return;
+        try
+        {
+            var pe = new PROCESSENTRY32 { dwSize = (uint)Unsafe.SizeOf<PROCESSENTRY32>() };
+            if (!Process32FirstW(snap, ref pe)) return;
+            do
+            {
+                uint pid = pe.th32ProcessID;
+                if (pid <= 4 || excludedPids.Contains(pid)) continue;
+                if (excludedNames.Contains(NormalizeName(pe.szExeFile))) continue;
+
+                IntPtr h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+                if (h == IntPtr.Zero) continue; // korumalı / sistem süreci: sessizce geç
+                try { EmptyWorkingSet(h); }
+                finally { CloseHandle(h); }
+            }
+            while (Process32NextW(snap, ref pe));
+        }
+        finally { CloseHandle(snap); }
     }
 
     static bool EnablePrivilege(string privilegeName)
     {
         if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr hToken))
             return false;
-
         try
         {
             if (!LookupPrivilegeValue(null, privilegeName, out LUID luid))
                 return false;
-
             var tp = new TOKEN_PRIVILEGES
             {
                 PrivilegeCount = 1,
-                Privileges = new LUID_AND_ATTRIBUTES
-                {
-                    Luid = luid,
-                    Attributes = SE_PRIVILEGE_ENABLED
-                }
+                Privileges = new LUID_AND_ATTRIBUTES { Luid = luid, Attributes = SE_PRIVILEGE_ENABLED }
             };
-
             return AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
         }
-        finally
-        {
-            CloseHandle(hToken);
-        }
+        finally { CloseHandle(hToken); }
     }
 
     static bool CheckIsAdministrator()
@@ -311,12 +405,8 @@ public class MemoryCleaner
         try
         {
             using var identity = WindowsIdentity.GetCurrent();
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+            return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
         }
-        catch
-        {
-            return false;
-        }
+        catch { return false; }
     }
 }
