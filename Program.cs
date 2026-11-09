@@ -33,7 +33,16 @@ static class Program
         // Komut satırından sessiz temizleme (--clean veya -c): Tam mod
         if (args.Length > 0 && (args[0] == "--clean" || args[0] == "-c"))
         {
-            MemoryCleaner.Clean(AppSettings.Load(), CleanMode.Full);
+            try
+            {
+                var r = MemoryCleaner.Clean(AppSettings.Load(), CleanMode.Full);
+                Console.WriteLine("freed=" + r.FreedMb.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
+                Environment.ExitCode = 0;
+            }
+            catch
+            {
+                Environment.ExitCode = 1;
+            }
             return;
         }
 

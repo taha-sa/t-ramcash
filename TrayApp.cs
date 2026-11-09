@@ -65,6 +65,7 @@ public sealed class TrayApp : ApplicationContext
     DateTime _lastCleanUtc = DateTime.UtcNow;
     bool _dialogOpen;
     bool _exiting;
+    TaskCompletionSource<CleanResult> _activeClean;   // calisan ram.clean yaniti; cikista iptal edilir
 
     public TrayApp(EventWaitHandle showEvent)
     {
@@ -191,6 +192,7 @@ public sealed class TrayApp : ApplicationContext
         {
             if (IsCleaning || _exiting) { tcs.TrySetException(new InvalidOperationException("busy")); return; }
             IsCleaning = true;
+            _activeClean = tcs;
             StatusText = "Temizleniyor...";
             CleaningChanged?.Invoke();
             Task.Run(() =>
@@ -199,6 +201,7 @@ public sealed class TrayApp : ApplicationContext
                 try { r = MemoryCleaner.Clean(Settings, mode); } catch (Exception ex) { err = ex.Message; }
                 _sync.Post(__ =>
                 {
+                    _activeClean = null;
                     Finish(r, auto, ratioRun, err);
                     if (r != null) tcs.TrySetResult(r); else tcs.TrySetException(new InvalidOperationException("clean failed"));
                 }, null);
@@ -366,6 +369,9 @@ public sealed class TrayApp : ApplicationContext
     {
         if (_exiting) return;
         _exiting = true;
+        // Cikista mesaj dongusu duracak; calisan temizligin sonucu artik islenmeyecegi icin bekleyen istegi bitir.
+        var pendingClean = _activeClean; _activeClean = null;
+        pendingClean?.TrySetException(new InvalidOperationException("exiting"));
         _tick.Stop();
         try { _updateLoopCts?.Cancel(); } catch { }
         UnregisterHotKey(_hot.Handle, HOTKEY_ID);

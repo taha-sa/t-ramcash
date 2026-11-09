@@ -26,3 +26,4 @@ Ozel anahtar: `C:\Users\hp\.t-suite\keys\t-ramcash.pem` (repo disinda).
 ## Ozellikler
 Akilli / Tam temizlik, haric tutma listesi, otomatik temizlik (daima Akilli), T-Link (`ram.status`, `ram.cleaned`,
 `ram.clean`, `app.show`, `app.version`), T-Update. Bellek analizi: `docs/bellek-analizi.md`.
+Not: `ram.status.standbyMb` alanı gerçekte `SystemCacheBytes` (sistem önbelleği, MB) değerini taşır; ad sözleşme gereği değiştirilmedi.

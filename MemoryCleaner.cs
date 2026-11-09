@@ -283,11 +283,11 @@ public static class MemoryCleaner
             bool ok;
             try { ok = action(); } catch { ok = false; }
             ulong b = AvailPhys();
-            steps.Add(new CleanStep(name, ((long)b - (long)a) / 1048576.0, sw.ElapsedMilliseconds - t0, ok));
+            steps.Add(new CleanStep(name, Math.Max(0, ((long)b - (long)a) / 1048576.0), sw.ElapsedMilliseconds - t0, ok));
         }
 
         if (!full || settings.CleanProcessWorkingSets)
-            Step("Süreç çalışma kümeleri", () => { EmptyProcessWorkingSets(settings); return true; });
+            Step("Süreç çalışma kümeleri", () => { EmptyProcessWorkingSets(settings, full); return true; });
 
         // NOT: NtSetSystemInformation(MemoryEmptyWorkingSets) bilerek KULLANILMIYOR: tüm süreçleri
         // dışlamaları yok sayarak boşaltır. Tam mod da dışlamalara saygı duyan süreç başına döngüyü kullanır.
@@ -392,7 +392,13 @@ public static class MemoryCleaner
     }
 
     /// <summary>Toolhelp ile süreçleri sayar (Process nesnesi üretmez), her tutamaç finally'de kapatılır.</summary>
-    static void EmptyProcessWorkingSets(AppSettings settings)
+    /// <summary>Tam modda, kullanici dislamalarina ek olarak, working set'i hic bosaltilmayacak yerlesik sistem surecleri.</summary>
+    static readonly HashSet<string> BuiltinSkipNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dwm", "audiodg", "csrss", "winlogon", "explorer", "ctfmon", "sihost", "taskhostw"
+    };
+
+    static void EmptyProcessWorkingSets(AppSettings settings, bool fullMode)
     {
         var excludedNames = BuildExcludedNames(settings, out var excludedPids);
         IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -418,6 +424,7 @@ public static class MemoryCleaner
             {
                 if (pid <= 4 || excludedPids.Contains(pid)) continue;
                 if (excludedNames.Contains(NormalizeName(name))) continue;
+                if (fullMode && BuiltinSkipNames.Contains(NormalizeName(name))) continue;
 
                 IntPtr h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
                 if (h == IntPtr.Zero) continue; // korumalı / sistem süreci: sessizce geç
