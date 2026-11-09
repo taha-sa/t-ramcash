@@ -313,7 +313,7 @@ public sealed class TrayApp : ApplicationContext
         _tick.Stop();
         UnregisterHotKey(_hot.Handle, HOTKEY_ID);
         _hot.Destroy();
-        try { _registry.Remove(AppId); } catch { }
+        try { _registry.MarkStopped(AppId); } catch { }
         try { _link?.DisposeAsync().AsTask().Wait(500); } catch { }
         _tray.Visible = false;
         _tray.Dispose();
@@ -360,7 +360,7 @@ public sealed class TrayApp : ApplicationContext
                 Pid = Environment.ProcessId, Events = events, Commands = commands,
                 ReleasesRepo = "taha-sa/t-ramcash-releases", Icon = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico")
             });
-            AppDomain.CurrentDomain.ProcessExit += (s, e) => { try { _registry.Remove(AppId); } catch { } };
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => { try { _registry.MarkStopped(AppId); } catch { } };
         }
         catch { /* T-Link opsiyonel: hata uygulamayi etkilemez */ }
     }
