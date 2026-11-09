@@ -53,12 +53,14 @@ public class SettingsForm : Form
 
     ListBox lstExcluded;
 
-    NumericUpDown numWarning;
-    NumericUpDown numDanger;
+    CheckBox chkAutoNotification;
+    readonly Action _checkUpdates;
 
-    public SettingsForm(AppSettings settings)
+    public SettingsForm(AppSettings settings, Action checkUpdates = null)
     {
         _settings = settings;
+        _checkUpdates = checkUpdates;
+        KeyPreview = true;
         Gdi.Acquire();
 
         Text = "Ayarlar";
@@ -125,6 +127,13 @@ public class SettingsForm : Form
         chkStartWithWindows = AddCheckBox(tabGeneral, "Windows başlangıcında otomatik başlat", _settings.StartWithWindows, 20, 60);
         chkStartMinimized = AddCheckBox(tabGeneral, "Sistem tepsisinde küçültülmüş başlat", _settings.StartMinimized, 20, 95);
         chkShowNotification = AddCheckBox(tabGeneral, "Temizlik sonuç bildirim balonunu göster", _settings.ShowCleanNotification, 20, 130);
+        chkAutoNotification = AddCheckBox(tabGeneral, "Otomatik temizlikte de bildirim göster (varsayılan sessiz)", _settings.AutoCleanNotification, 20, 165);
+        if (_checkUpdates != null)
+        {
+            var btnUpd = MakeGhostButton("Güncellemeleri denetle", new Rectangle(20, 205, 190, 32));
+            btnUpd.Click += (s, e) => _checkUpdates();
+            tabGeneral.Controls.Add(btnUpd);
+        }
 
         // Tab 2: Bellek Temizleme
         var tabClean = new TabPage("Temizleme Alanları") { BackColor = CardBg };
@@ -172,48 +181,6 @@ public class SettingsForm : Form
             ForeColor = Color.White
         };
         tabClean.Controls.Add(numAutoInterval);
-
-        // Tab 3: Eşik Seviyeleri
-        var tabLevels = new TabPage("Eşikler") { BackColor = CardBg };
-        var lblWarn = new Label
-        {
-            Text = "Uyarı Seviyesi Eşiği (%):",
-            Location = new Point(20, 30),
-            AutoSize = true,
-            ForeColor = TextWhite
-        };
-        numWarning = new NumericUpDown
-        {
-            Location = new Point(220, 28),
-            Width = 60,
-            Minimum = 10,
-            Maximum = 95,
-            Value = _settings.WarningLevel,
-            BackColor = Color.FromArgb(34, 34, 40),
-            ForeColor = Color.White
-        };
-        tabLevels.Controls.Add(lblWarn);
-        tabLevels.Controls.Add(numWarning);
-
-        var lblDanger = new Label
-        {
-            Text = "Tehlike Seviyesi Eşiği (%):",
-            Location = new Point(20, 75),
-            AutoSize = true,
-            ForeColor = TextWhite
-        };
-        numDanger = new NumericUpDown
-        {
-            Location = new Point(220, 73),
-            Width = 60,
-            Minimum = 20,
-            Maximum = 99,
-            Value = _settings.DangerLevel,
-            BackColor = Color.FromArgb(34, 34, 40),
-            ForeColor = Color.White
-        };
-        tabLevels.Controls.Add(lblDanger);
-        tabLevels.Controls.Add(numDanger);
 
         // Otomatik temizleme modu (sabit: Akıllı)
         tabClean.Controls.Add(new Label
@@ -265,7 +232,6 @@ public class SettingsForm : Form
 
         tabControl.TabPages.Add(tabGeneral);
         tabControl.TabPages.Add(tabClean);
-        tabControl.TabPages.Add(tabLevels);
         tabControl.TabPages.Add(tabExc);
         Controls.Add(tabControl);
 
@@ -335,6 +301,12 @@ public class SettingsForm : Form
         return chk;
     }
 
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.Escape) { Close(); return true; }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
     void SaveChanges()
     {
         _settings.AlwaysOnTop = chkAlwaysOnTop.Checked;
@@ -356,8 +328,7 @@ public class SettingsForm : Form
         _settings.ExcludedProcesses = lstExcluded.Items.Cast<string>().Select(MemoryCleaner.NormalizeName)
             .Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-        _settings.WarningLevel = (int)numWarning.Value;
-        _settings.DangerLevel = (int)numDanger.Value;
+        _settings.AutoCleanNotification = chkAutoNotification.Checked;
 
         MemoryCleaner.InvalidateExcludeCache();
         _settings.Save();

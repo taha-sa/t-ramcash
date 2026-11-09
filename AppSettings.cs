@@ -25,7 +25,8 @@ public class AppSettings
     public bool StartMinimized { get; set; } = false;
     public bool StartWithWindows { get; set; } = false;
     public bool ShowCleanNotification { get; set; } = true;
-    public bool IsDarkThemeEnabled { get; set; } = true;
+    /// <summary>Otomatik temizlikte balon (varsayilan sessiz); elle temizlikte ShowCleanNotification gecerli.</summary>
+    public bool AutoCleanNotification { get; set; } = false;
 
     /// <summary>Temizlikten haric tutulan surec adlari (.exe'siz).</summary>
     public List<string> ExcludedProcesses { get; set; } = new();
@@ -33,8 +34,6 @@ public class AppSettings
     /// <summary>Elle temizlik modu: "Smart" | "Full". Otomatik temizlik her zaman Akilli.</summary>
     public string ManualMode { get; set; } = "Smart";
 
-    public int WarningLevel { get; set; } = 60;
-    public int DangerLevel { get; set; } = 80;
 
     static readonly string ConfigDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -81,8 +80,6 @@ public class AppSettings
     {
         s.AutoCleanRatioThreshold = Math.Clamp(s.AutoCleanRatioThreshold, 10, 99);
         s.AutoCleanIntervalMinutes = Math.Clamp(s.AutoCleanIntervalMinutes, 1, 360);
-        s.WarningLevel = Math.Clamp(s.WarningLevel, 10, 95);
-        s.DangerLevel = Math.Clamp(s.DangerLevel, 20, 99);
         return s;
     }
 
