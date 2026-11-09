@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using TSuite.Diagnostics;
 
 namespace TRamCash;
 
@@ -54,6 +55,7 @@ public class SettingsForm : Form
     ListBox lstExcluded;
 
     CheckBox chkAutoNotification;
+    CheckBox chkCrashReports;
     readonly Action _checkUpdates;
 
     public SettingsForm(AppSettings settings, Action checkUpdates = null)
@@ -141,9 +143,13 @@ public class SettingsForm : Form
         chkStartMinimized = AddCheckBox(tabGeneral, "Sistem tepsisinde küçültülmüş başlat", _settings.StartMinimized, 20, 95);
         chkShowNotification = AddCheckBox(tabGeneral, "Temizlik sonuç bildirim balonunu göster", _settings.ShowCleanNotification, 20, 130);
         chkAutoNotification = AddCheckBox(tabGeneral, "Otomatik temizlikte de bildirim göster (varsayılan sessiz)", _settings.AutoCleanNotification, 20, 165);
+        chkCrashReports = AddCheckBox(tabGeneral, "Hata raporlarını otomatik hazırla", CrashReporter.AutomaticallyPrepareReports, 20, 200);
+        var btnReport = MakeGhostButton("Hata raporu gönder…", new Rectangle(20, 275, 190, 32));
+        btnReport.Click += (s, e) => ManualReport.Show(this);
+        tabGeneral.Controls.Add(btnReport);
         if (_checkUpdates != null)
         {
-            var btnUpd = MakeGhostButton("Güncellemeleri denetle", new Rectangle(20, 205, 190, 32));
+            var btnUpd = MakeGhostButton("Güncellemeleri denetle", new Rectangle(20, 235, 190, 32));
             btnUpd.Click += (s, e) => _checkUpdates();
             tabGeneral.Controls.Add(btnUpd);
         }
@@ -322,6 +328,7 @@ public class SettingsForm : Form
 
     void SaveChanges()
     {
+        CrashReporter.AutomaticallyPrepareReports = chkCrashReports.Checked;
         _settings.AlwaysOnTop = chkAlwaysOnTop.Checked;
         _settings.StartWithWindows = chkStartWithWindows.Checked;
         _settings.StartMinimized = chkStartMinimized.Checked;

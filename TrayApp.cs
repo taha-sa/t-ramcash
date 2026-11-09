@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using TSuite.Diagnostics;
 using TSuite.Link;
 using TSuite.Update;
 
@@ -115,6 +116,7 @@ public sealed class TrayApp : ApplicationContext
         StartUpdateFlow();
 
         if (startInTray || Settings.StartMinimized) ScheduleTrim(); else ShowMain();
+        _sync.Post(_ => { if (!_exiting && CrashReporter.GetPendingReport() is { } report) { using var dialog = new CrashReportDialog(report, Theme); dialog.ShowDialog(_main); } }, null);
     }
 
     #region Arka plan kontrolu (5 sn)
@@ -523,7 +525,7 @@ public sealed class TrayApp : ApplicationContext
         }
     }
 
-    static readonly UpdateTheme Theme = new(
+    internal static readonly UpdateTheme Theme = new(
         Bg: Color.FromArgb(14, 14, 18), Surface: Color.FromArgb(20, 20, 26), Border: Color.FromArgb(34, 34, 44),
         Accent: Color.FromArgb(212, 160, 23), AccentHover: Color.FromArgb(228, 176, 36),
         Text: Color.FromArgb(240, 240, 245), TextDim: Color.FromArgb(145, 145, 158))

@@ -66,6 +66,9 @@ static class Program
         try { SetCurrentProcessExplicitAppUserModelID("TRamCash.App.V3"); } catch { }
 
         ApplicationConfiguration.Initialize();
+        TSuite.Diagnostics.CrashReporter.Install(TrayApp.AppId, "T-RamCash", TrayApp.Version, "taha-sa/t-ramcash-releases", TrayApp.Theme);
+        TSuite.Diagnostics.CrashReporter.InstallWinForms();
+        TSuite.Diagnostics.Log.Info("Application starting");
         Application.Run(new TrayApp(showEvent, startInTray));
     }
 }

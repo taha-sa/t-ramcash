@@ -34,6 +34,7 @@
     <TSuiteRoot Condition="'$(TSuiteRoot)' == ''">$(MSBuildProjectDirectory)\..\..\..\..\Projects\t-suite</TSuiteRoot>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="$(TSuiteRoot)\src\TSuite.Diagnostics\TSuite.Diagnostics.csproj" />
     <ProjectReference Include="$(TSuiteRoot)\src\TSuite.Link\TSuite.Link.csproj" />
     <ProjectReference Include="$(TSuiteRoot)\src\TSuite.Update\TSuite.Update.csproj" />
   </ItemGroup>
