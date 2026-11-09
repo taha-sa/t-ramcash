@@ -91,6 +91,9 @@ public sealed class TrayApp : ApplicationContext
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add("Görev Yöneticisi", null, (s, e) => OpenTaskManager());
         _menu.Items.Add("Ayarlar...", null, (s, e) => OpenSettings(_main));
+        _menu.Items.Add("Güncellemeleri denetle", null, (s, e) => CheckUpdatesManually());
+        if (!MemoryCleaner.IsAdministrator)
+            _menu.Items.Add("Yönetici olarak yeniden başlat", null, (s, e) => RestartAsAdmin());
         _menu.Items.Add("Hakkında...", null, (s, e) => OpenAbout(_main));
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add("Çıkış", null, (s, e) => FullExit());
@@ -115,7 +118,7 @@ public sealed class TrayApp : ApplicationContext
         ThreadPool.RegisterWaitForSingleObject(_showEvent, (st, to) => _sync.Post(_ => ShowMain(), null), null, -1, false);
 
         StartLink();
-        ScheduleUpdateCheck();
+        StartUpdateFlow();
 
         if (Settings.StartMinimized) ScheduleTrim(); else ShowMain();
     }
@@ -136,6 +139,12 @@ public sealed class TrayApp : ApplicationContext
         }
     }
 
+    // Oran tetikli oto-temizlikte geri cekilme: yetmezse 60 -> 120 -> 300 sn; basarili dususte sifirlanir.
+    static readonly int[] RatioBackoffSec = { 60, 120, 300 };
+    int _ratioStep;
+    DateTime _ratioNextUtc = DateTime.MinValue;
+    bool _ratioTriggered;
+
     void AutoCleanCheck()
     {
         if (IsCleaning) return;
@@ -143,8 +152,8 @@ public sealed class TrayApp : ApplicationContext
         double since = (now - _lastCleanUtc).TotalSeconds;
         if (since < 10) return; // son temizlikten sonraki 10 sn icinde otomatik temizlik yok
 
-        if (Settings.AutoCleanByRatio && Snap.MemoryLoadPercent >= Settings.AutoCleanRatioThreshold && since > 60)
-        { RequestClean(CleanMode.Smart, true); return; }
+        if (Settings.AutoCleanByRatio && Snap.MemoryLoadPercent >= Settings.AutoCleanRatioThreshold && now >= _ratioNextUtc)
+        { _ratioTriggered = true; RequestClean(CleanMode.Smart, true); return; }
 
         if (Settings.AutoCleanByInterval && since >= Settings.AutoCleanIntervalMinutes * 60.0)
             RequestClean(CleanMode.Smart, true); // otomatik her zaman Akilli
@@ -187,6 +196,8 @@ public sealed class TrayApp : ApplicationContext
 
     public Task<CleanResult> CleanAsync(CleanMode mode, bool auto)
     {
+        bool ratioRun = auto && _ratioTriggered;
+        _ratioTriggered = false;
         var tcs = new TaskCompletionSource<CleanResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         _sync.Post(_ =>
         {
@@ -196,11 +207,11 @@ public sealed class TrayApp : ApplicationContext
             CleaningChanged?.Invoke();
             Task.Run(() =>
             {
-                CleanResult r = null;
-                try { r = MemoryCleaner.Clean(Settings, mode); } catch { }
+                CleanResult r = null; string err = null;
+                try { r = MemoryCleaner.Clean(Settings, mode); } catch (Exception ex) { err = ex.Message; }
                 _sync.Post(__ =>
                 {
-                    Finish(r);
+                    Finish(r, auto, ratioRun, err);
                     if (r != null) tcs.TrySetResult(r); else tcs.TrySetException(new InvalidOperationException("clean failed"));
                 }, null);
             });
@@ -208,23 +219,58 @@ public sealed class TrayApp : ApplicationContext
         return tcs.Task;
     }
 
-    void Finish(CleanResult r)
+    void Finish(CleanResult r, bool auto, bool ratioRun, string err)
     {
         IsCleaning = false;
         _lastCleanUtc = DateTime.UtcNow;
         MemoryCleaner.ReadSnapshot(ref Snap);
         UpdateTrayIcon();
+
+        if (ratioRun)
+        {
+            bool stillHigh = Snap.MemoryLoadPercent >= Settings.AutoCleanRatioThreshold;
+            bool little = r == null || r.FreedMb < 100;
+            if (stillHigh && little) _ratioStep = Math.Min(_ratioStep + 1, RatioBackoffSec.Length - 1);
+            else _ratioStep = 0;
+            _ratioNextUtc = DateTime.UtcNow.AddSeconds(RatioBackoffSec[_ratioStep]);
+        }
+
+        bool mainHidden = _main == null || _main.IsDisposed || !_main.Visible || _main.WindowState == FormWindowState.Minimized;
         if (r != null)
         {
-            StatusText = $"{r.FreedMb:F1} MB serbest";
+            StatusText = r.Note ?? $"{r.FreedMb:F1} MB serbest";
             _link?.Publish("ram.cleaned", LinkJson.Obj(("freedMb", r.FreedMb), ("mode", r.Mode == CleanMode.Full ? "full" : "smart")));
-            if ((_main == null || _main.IsDisposed || !_main.Visible || _main.WindowState == FormWindowState.Minimized) && Settings.ShowCleanNotification)
-                _tray.ShowBalloonTip(3000, "T-RamCash", $"Bellek temizlendi!\n{r.FreedMb:F1} MB RAM serbest bırakıldı.", ToolTipIcon.Info);
+            bool wantBalloon = auto ? Settings.AutoCleanNotification : Settings.ShowCleanNotification;
+            if (mainHidden && (wantBalloon || (!auto && r.Note != null)))
+            {
+                string body = r.Note != null
+                    ? $"{r.Note}.\n{r.FreedMb:F1} MB serbest bırakıldı."
+                    : $"Bellek temizlendi!\n{r.FreedMb:F1} MB RAM serbest bırakıldı.";
+                _tray.ShowBalloonTip(3000, "T-RamCash", body, r.Note != null ? ToolTipIcon.Warning : ToolTipIcon.Info);
+            }
         }
-        else StatusText = "Temizlik başarısız";
+        else
+        {
+            StatusText = "Temizlik başarısız";
+            if (!auto) _tray.ShowBalloonTip(4000, "T-RamCash", "Temizlik başarısız oldu" + (string.IsNullOrEmpty(err) ? "." : ": " + err), ToolTipIcon.Error);
+        }
         CleaningChanged?.Invoke();
         if (r != null) CleanCompleted?.Invoke(r);
         if (_main == null) ScheduleTrim();
+    }
+
+    /// <summary>Uygulamayi yonetici olarak yeniden baslatir (UAC onayi); kullanici reddederse hicbir sey olmaz.</summary>
+    public void RestartAsAdmin()
+    {
+        try
+        {
+            string exe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exe)) return;
+            using var p = Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, Verb = "runas" });
+            if (p != null) FullExit();
+        }
+        catch (System.ComponentModel.Win32Exception) { /* UAC reddedildi */ }
+        catch { }
     }
 
     #endregion
@@ -288,7 +334,7 @@ public sealed class TrayApp : ApplicationContext
         _dialogOpen = true;
         try
         {
-            using var frm = new SettingsForm(Settings);
+            using var frm = new SettingsForm(Settings, CheckUpdatesManually);
             if (frm.ShowDialog(owner) == DialogResult.OK && _main != null) _main.ApplySettings();
         }
         finally { _dialogOpen = false; if (_main == null) ScheduleTrim(); }
@@ -312,6 +358,7 @@ public sealed class TrayApp : ApplicationContext
         if (_exiting) return;
         _exiting = true;
         _tick.Stop();
+        try { _updateLoopCts?.Cancel(); } catch { }
         UnregisterHotKey(_hot.Handle, HOTKEY_ID);
         _hot.Destroy();
         try { _registry.MarkStopped(AppId); } catch { }
@@ -336,11 +383,7 @@ public sealed class TrayApp : ApplicationContext
             _link = new LinkServer(AppId, Version, events, commands);
             // Standart güncelleme komutları (T-Bridge "Hepsini güncelle"): app.update.check / app.update.install
             _updateCtl = new UpdateController(new UpdateChecker(MakeUpdateOptions()));
-            _updateCtl.ExitRequested += () => _sync.Post(_ => FullExit(), null);
-            _updateCtl.StateChanged += () =>
-            {
-                if (_updateCtl.State is UpdateState.Downloading) _sync.Post(_ => EnsureUpdateCard(), null);
-            };
+            WireUpdateCtl(_updateCtl);
             UpdateLink.Register(_link, _updateCtl);
             _link.OnCommand("ram.clean", async (d, ct) =>
             {
@@ -374,28 +417,94 @@ public sealed class TrayApp : ApplicationContext
     UpdateCard _updateCard;
 
     public static UpdateOptions MakeUpdateOptions() => new() { AppId = AppId, CurrentVersion = Version, PublicKeyBase64 = UpdatePublicKey };
+    static UpdateOptions MakeUpdateOptions(TimeSpan minInterval) => new() { AppId = AppId, CurrentVersion = Version, PublicKeyBase64 = UpdatePublicKey, MinInterval = minInterval };
 
     void EnsureUpdateCard()
     {
-        if (_updateCtl == null || _updateCtl.Info == null) return;
-        if (_updateCard == null || _updateCard.IsDisposed) { _updateCard = new UpdateCard(_updateCtl, Theme); _updateCard.Show(); }
+        EnsureUpdateCard(_updateCtl);
     }
 
-    void ScheduleUpdateCheck()
+    void EnsureUpdateCard(UpdateController ctl)
     {
+        if (ctl == null || ctl.Info == null) return;
+        if (_updateCard != null && !_updateCard.IsDisposed) { _updateCard.Activate(); return; }
+        _updateCard = new UpdateCard(ctl, Theme);
+        _updateCard.FormClosed += (s, e) => { _updateCard = null; ScheduleTrim(); };
+        _updateCard.Show();
+    }
+
+    void WireUpdateCtl(UpdateController ctl)
+    {
+        ctl.ExitRequested += () => _sync.Post(_ => FullExit(), null);
+        ctl.StateChanged += () =>
+        {
+            if (ctl.State is UpdateState.Downloading) _sync.Post(_ => EnsureUpdateCard(ctl), null);
+        };
+    }
+
+    CancellationTokenSource _updateLoopCts;
+    bool _updateChecking;
+
+    /// <summary>Acilista bekleyen guncellemeyi (agsiz) gosterir, 30 sn sonra ve her 12 saatte bir sessizce denetler.</summary>
+    void StartUpdateFlow()
+    {
+        _updateLoopCts = new CancellationTokenSource();
+        var ct = _updateLoopCts.Token;
         Task.Run(async () =>
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
-                var ctl = _updateCtl ?? new UpdateController(new UpdateChecker(MakeUpdateOptions()));
-                if (!await ctl.CheckAsync().ConfigureAwait(false) || ctl.Info == null) return;
+                await Task.Delay(TimeSpan.FromSeconds(30), ct).ConfigureAwait(false);
+                await RunUpdateCheckAsync(false, true).ConfigureAwait(false); // bekleyen + ilk kontrol
+                using var timer = new PeriodicTimer(TimeSpan.FromHours(12));
+                while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+                    await RunUpdateCheckAsync(false, false).ConfigureAwait(false);
+            }
+            catch { /* iptal / ag yok */ }
+        });
+    }
+
+    /// <summary>Elle denetim: zorlamali; sonucu balonla bildirir.</summary>
+    public void CheckUpdatesManually() => _ = RunUpdateCheckAsync(true, false);
+
+    /// <summary>HttpClient/UpdateChecker/Controller yalniz kontrol suresince yasar; bitince birakilip kucultulur.</summary>
+    async Task RunUpdateCheckAsync(bool manual, bool loadPending)
+    {
+        if (_exiting || _updateChecking) return;
+        if (_updateCtl != null && _updateCtl.IsBusy) return;
+        if (_updateCard != null && !_updateCard.IsDisposed) return;
+        _updateChecking = true;
+        bool keepAlive = false;
+        try
+        {
+            var ctl = new UpdateController(new UpdateChecker(MakeUpdateOptions(TimeSpan.FromHours(11))));
+            WireUpdateCtl(ctl);
+            bool found = loadPending && ctl.LoadPending();
+            if (!found) found = await ctl.CheckNow(force: manual).ConfigureAwait(false) && ctl.Info != null;
+            if (found)
+            {
                 var info = ctl.Info;
                 _link?.Publish("app.update.available", LinkJson.Obj(("version", info.NewVersion), ("notes", info.Notes)));
-                _sync.Post(_ => EnsureUpdateCard(), null);
+                _sync.Post(_ => EnsureUpdateCard(ctl), null);
+                keepAlive = true; // kart acik kaldigi surece denetleyici gerekli; kart kapaninca birakilir
             }
-            catch { /* ag yoksa sessizce gec */ }
-        });
+            else if (manual)
+            {
+                bool failed = ctl.State == UpdateState.Failed;
+                _sync.Post(_ => _tray.ShowBalloonTip(3000, "T-RamCash",
+                    failed ? "Güncellemeler denetlenemedi (ağ bağlantısını kontrol edin)." : "En güncel sürümü kullanıyorsunuz.",
+                    failed ? ToolTipIcon.Warning : ToolTipIcon.Info), null);
+            }
+        }
+        catch
+        {
+            if (manual) _sync.Post(_ => _tray.ShowBalloonTip(3000, "T-RamCash", "Güncellemeler denetlenemedi.", ToolTipIcon.Warning), null);
+        }
+        finally
+        {
+            _updateChecking = false;
+            if (!keepAlive) _sync.Post(_ => { if (_main == null) ScheduleTrim(); }, null);
+        }
     }
 
     static readonly UpdateTheme Theme = new(
