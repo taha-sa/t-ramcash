@@ -259,6 +259,14 @@ public static class MemoryCleaner
     /// </summary>
     public static CleanResult Clean(AppSettings settings, CleanMode mode)
     {
+        // SeDebugPrivilege en az ayricalik: yalniz Tam modda ve temizlik suresince acik, sonra geri alinir.
+        bool dbg = mode == CleanMode.Full && SetPrivilege("SeDebugPrivilege", true);
+        try { return CleanCore(settings, mode); }
+        finally { if (dbg) SetPrivilege("SeDebugPrivilege", false); }
+    }
+
+    static CleanResult CleanCore(AppSettings settings, CleanMode mode)
+    {
         var sw = Stopwatch.StartNew();
         ulong before = AvailPhys();
         var steps = new List<CleanStep>(8);
@@ -266,7 +274,6 @@ public static class MemoryCleaner
 
         bool privOk = EnablePrivilege("SeProfileSingleProcessPrivilege");
         EnablePrivilege("SeIncreaseQuotaPrivilege");
-        EnablePrivilege("SeDebugPrivilege");
         bool admin = IsAdministrator;
 
         void Step(string name, Func<bool> action)
@@ -421,7 +428,9 @@ public static class MemoryCleaner
         finally { CloseHandle(snap); }
     }
 
-    static bool EnablePrivilege(string privilegeName)
+    static bool EnablePrivilege(string privilegeName) => SetPrivilege(privilegeName, true);
+
+    static bool SetPrivilege(string privilegeName, bool enable)
     {
         if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out IntPtr hToken))
             return false;
@@ -432,7 +441,7 @@ public static class MemoryCleaner
             var tp = new TOKEN_PRIVILEGES
             {
                 PrivilegeCount = 1,
-                Privileges = new LUID_AND_ATTRIBUTES { Luid = luid, Attributes = SE_PRIVILEGE_ENABLED }
+                Privileges = new LUID_AND_ATTRIBUTES { Luid = luid, Attributes = enable ? SE_PRIVILEGE_ENABLED : 0u }
             };
             if (!AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero)) return false;
             return Marshal.GetLastWin32Error() != 1300; // ERROR_NOT_ALL_ASSIGNED: yetki verilmedi
