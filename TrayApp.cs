@@ -289,8 +289,28 @@ public sealed class TrayApp : ApplicationContext
     public void HideMain()
     {
         var f = _main;
-        if (f != null && !f.IsDisposed) f.Close();
+        if (f == null || f.IsDisposed) return;
+        // Ayarlar/Hakkinda modal acikken sahibi (ana form) kapatmak diyalogu sahipsiz birakir: once diyalogu iptal et,
+        // modal dongu bitince ana formu kapat.
+        var dlg = _openDialog;
+        if (dlg != null && !dlg.IsDisposed)
+        {
+            try { dlg.DialogResult = DialogResult.Cancel; dlg.Close(); } catch { }
+            var t = new System.Windows.Forms.Timer { Interval = 80 };
+            t.Tick += (s, e) =>
+            {
+                if (_openDialog != null && !_openDialog.IsDisposed) return; // diyalog hala kapaniyor: bir sonraki tikte dene
+                t.Dispose();
+                var m = _main;
+                if (m != null && !m.IsDisposed) m.Close();
+            };
+            t.Start();
+            return;
+        }
+        f.Close();
     }
+
+    Form _openDialog;
 
     System.Windows.Forms.Timer _trimTimer;
 
@@ -323,17 +343,18 @@ public sealed class TrayApp : ApplicationContext
         try
         {
             using var frm = new SettingsForm(Settings, CheckUpdatesManually);
+            _openDialog = frm;
             if (frm.ShowDialog(owner) == DialogResult.OK && _main != null) _main.ApplySettings();
         }
-        finally { _dialogOpen = false; if (_main == null) ScheduleTrim(); }
+        finally { _openDialog = null; _dialogOpen = false; if (_main == null) ScheduleTrim(); }
     }
 
     public void OpenAbout(IWin32Window owner)
     {
         if (_dialogOpen) return;
         _dialogOpen = true;
-        try { using var frm = new AboutForm(); frm.ShowDialog(owner); }
-        finally { _dialogOpen = false; if (_main == null) ScheduleTrim(); }
+        try { using var frm = new AboutForm(); _openDialog = frm; frm.ShowDialog(owner); }
+        finally { _openDialog = null; _dialogOpen = false; if (_main == null) ScheduleTrim(); }
     }
 
     static void OpenTaskManager()
