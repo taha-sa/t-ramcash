@@ -129,7 +129,7 @@ public class SettingsForm : Form
         // Tab 2: Bellek Temizleme
         var tabClean = new TabPage("Temizleme Alanları") { BackColor = CardBg };
         chkWorkingSets = AddCheckBox(tabClean, "Süreç çalışma kümeleri (Working Sets)", _settings.CleanProcessWorkingSets, 20, 20);
-        chkSystemWorkingSet = AddCheckBox(tabClean, "Sistem çalışma kümesi (System Set)", _settings.CleanSystemWorkingSet, 20, 50);
+        chkSystemWorkingSet = AddCheckBox(tabClean, "Sistem çalışma kümesi (yalnız Tam mod; tüm süreçleri boşaltır)", _settings.CleanSystemWorkingSet, 20, 50);
         chkModifiedList = AddCheckBox(tabClean, "Değiştirilmiş sayfa listesi (Modified List)", _settings.CleanModifiedPageList, 20, 80);
         chkStandbyList = AddCheckBox(tabClean, "Bekleme listesi (Standby List / RAM Cache)", _settings.CleanStandbyList, 20, 110);
         chkStandbyLowPriority = AddCheckBox(tabClean, "Düşük öncelikli bekleme listesi", _settings.CleanStandbyLowPriority, 20, 140);
@@ -236,7 +236,7 @@ public class SettingsForm : Form
         var tabExc = new TabPage("Hariç Tutulanlar") { BackColor = CardBg };
         tabExc.Controls.Add(new Label
         {
-            Text = "Bu süreçlerin belleği temizlenmez. Ön plandaki uygulama, T-RamCash ve diğer T-Suite uygulamaları her zaman hariçtir.",
+            Text = "Bu süreçlerin belleği temizlenmez. Ön plandaki uygulama, T-RamCash ve diğer T-Suite uygulamaları her zaman hariçtir. Tam modda 'Sistem çalışma kümesi' adımı bu listeyi yok sayar.",
             Font = Gdi.GetFont("Segoe UI", 8F),
             ForeColor = TextMuted,
             Location = new Point(16, 16),
