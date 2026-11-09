@@ -58,6 +58,8 @@ public class SettingsForm : Form
 
     public SettingsForm(AppSettings settings, Action checkUpdates = null)
     {
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         _settings = settings;
         _checkUpdates = checkUpdates;
         KeyPreview = true;
@@ -71,12 +73,23 @@ public class SettingsForm : Form
         BackColor = BgDark;
         ForeColor = TextWhite;
 
-        IntPtr ptr = CreateRoundRectRgn(0, 0, Width, Height, 20, 20);
-        Region = Region.FromHrgn(ptr);
-        DeleteObject(ptr);
+        ApplyRoundedRegion();
 
         BuildUI();
     }
+
+    void ApplyRoundedRegion()
+    {
+        int rr = (int)Math.Round(20 * DeviceDpi / 96f);
+        IntPtr ptr = CreateRoundRectRgn(0, 0, Width + 1, Height + 1, rr, rr);
+        var old = Region;
+        Region = Region.FromHrgn(ptr);
+        old?.Dispose();
+        DeleteObject(ptr);
+    }
+
+    // DPI olcekleme sonrasi boyut degisir: yuvarlak bolge yeniden hesaplanir.
+    protected override void OnSizeChanged(EventArgs e) { base.OnSizeChanged(e); ApplyRoundedRegion(); }
 
     void BuildUI()
     {
@@ -350,6 +363,8 @@ public class ProcessPickerForm : Form
 
     public ProcessPickerForm(HashSet<string> exclude)
     {
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         Gdi.Acquire();
         Text = "Süreç seç";
         Size = new Size(340, 440);

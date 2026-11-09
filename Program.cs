@@ -16,6 +16,14 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // Test kancasi: `--dpi N` yerlesim dogrulamasi (arayuz yok); sonuc TEMP ramcash-dpi-test.txt. N yoksa 96/120/144/168.
+        if (args.Length > 0 && args[0] == "--dpi")
+        {
+            int[] dpis = args.Length > 1 && int.TryParse(args[1], out int d) ? new[] { d } : new[] { 96, 120, 144, 168 };
+            System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ramcash-dpi-test.txt"), RcLayout.SelfTest(dpis));
+            return;
+        }
+
         // Komut satırından sessiz temizleme (--clean veya -c): Tam mod
         if (args.Length > 0 && (args[0] == "--clean" || args[0] == "-c"))
         {

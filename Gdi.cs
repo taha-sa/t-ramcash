@@ -17,7 +17,8 @@ static class Gdi
     static readonly Dictionary<int, SolidBrush> Brushes = new();
     static readonly Dictionary<(int, float), Pen> Pens = new();
     static readonly Dictionary<(int, int, int, int, int), GraphicsPath> Paths = new();
-    static StringFormat _center, _hCenter, _vCenterLeft;
+    static readonly Dictionary<(string, float, FontStyle, int), float> Fits = new();
+    static StringFormat _center, _hCenter, _vCenterLeft, _topLeft;
 
     public static void Acquire() => _refs++;
 
@@ -30,8 +31,34 @@ static class Gdi
         foreach (var p in Pens.Values) p.Dispose();
         foreach (var g in Paths.Values) g.Dispose();
         Fonts.Clear(); Brushes.Clear(); Pens.Clear(); Paths.Clear();
-        _center?.Dispose(); _hCenter?.Dispose(); _vCenterLeft?.Dispose();
-        _center = _hCenter = _vCenterLeft = null;
+        _center?.Dispose(); _hCenter?.Dispose(); _vCenterLeft?.Dispose(); _topLeft?.Dispose();
+        _center = _hCenter = _vCenterLeft = _topLeft = null;
+        Fits.Clear();
+    }
+
+    /// <summary>DPI degisince olcege bagli onbellekler (yol, sigdirma sonuclari) gecersiz kilinir.</summary>
+    public static void ResetScaled()
+    {
+        foreach (var g in Paths.Values) g.Dispose();
+        Paths.Clear();
+        Fits.Clear();
+    }
+
+    /// <summary>Metni maxW piksele sigdiran yazi tipi: baslangic boyutundan 0,5 pt adimlarla kucultur (en az 6 pt). Sonuc onbellekli.</summary>
+    public static Font FitFont(Graphics g, string text, string name, float size, FontStyle style, float maxW)
+    {
+        var key = (text, size, style, (int)maxW);
+        if (Fits.TryGetValue(key, out float fs)) return GetFont(name, fs, style);
+        float cur = size;
+        while (cur > 6f)
+        {
+            var f = GetFont(name, cur, style);
+            if (g.MeasureString(text, f, int.MaxValue, TopLeft).Width <= maxW) break;
+            cur -= 0.5f;
+        }
+        if (Fits.Count > 128) Fits.Clear();
+        Fits[key] = cur;
+        return GetFont(name, cur, style);
     }
 
     public static Font GetFont(string name, float size, FontStyle style = FontStyle.Regular)
@@ -74,6 +101,7 @@ static class Gdi
         return path;
     }
 
+    public static StringFormat TopLeft => _topLeft ??= new StringFormat(StringFormatFlags.NoWrap) { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near, Trimming = StringTrimming.EllipsisCharacter };
     public static StringFormat Center => _center ??= new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
     public static StringFormat HCenter => _hCenter ??= new StringFormat { Alignment = StringAlignment.Center };
     public static StringFormat VCenterLeft => _vCenterLeft ??= new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };

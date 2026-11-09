@@ -45,13 +45,35 @@ public class AboutForm : Form
     bool _hoverInstagram = false;
     bool _hoverBtnClose = false;
 
+    const int LW = 340, LH = 342;   // tasarim (96 DPI) boyutu
+    float _sc = 1f;                 // DeviceDpi / 96
+    Font GF(string name, float pt, FontStyle st = FontStyle.Regular) => Gdi.GetFont(name, pt / _sc, st); // g.ScaleTransform(_sc) ile birlikte pt * _sc
+    Point LP(Point p) => new((int)Math.Round(p.X / _sc), (int)Math.Round(p.Y / _sc));
+
+    void ApplyScale()
+    {
+        _sc = DeviceDpi / 96f;
+        Size = new Size((int)Math.Round(LW * _sc), (int)Math.Round(LH * _sc));
+        _sigFont?.Dispose(); _sigFont = null;
+        ApplyRoundedRegion();
+        Invalidate();
+    }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        if (IsHandleCreated) BeginInvoke(new Action(ApplyScale)); else ApplyScale();
+    }
+
     public AboutForm()
     {
+        AutoScaleMode = AutoScaleMode.Dpi;
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterParent;
         ShowInTaskbar = false;
-        Size = new Size(340, 342);
+        _sc = DeviceDpi / 96f;
+        Size = new Size((int)Math.Round(LW * _sc), (int)Math.Round(LH * _sc));
         BackColor = BgDark;
         KeyPreview = true;
 
@@ -68,7 +90,7 @@ public class AboutForm : Form
 
     void ApplyRoundedRegion()
     {
-        IntPtr ptr = CreateRoundRectRgn(0, 0, Width, Height, 16, 16);
+        IntPtr ptr = CreateRoundRectRgn(0, 0, Width + 1, Height + 1, (int)Math.Round(16 * _sc), (int)Math.Round(16 * _sc));
         Region = Region.FromHrgn(ptr);
         DeleteObject(ptr);
     }
@@ -86,12 +108,13 @@ public class AboutForm : Form
     {
         base.OnPaint(e);
         var g = e.Graphics;
+        g.ScaleTransform(_sc, _sc);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
         // Dış kenar çizgisi
         var penBorder = Gdi.GetPen(CardBorder, 1);
-            g.DrawRectangle(penBorder, 0, 0, Width - 1, Height - 1);
+            g.DrawRectangle(penBorder, 0, 0, LW - 1, LH - 1);
 
         // 1. Üst Başlık Çubuğu
         DrawHeader(g);
@@ -115,11 +138,11 @@ public class AboutForm : Form
         DrawCustomLogo(g, 20, 12, 18);
 
         // Başlık
-        var fTitle = Gdi.GetFont("Segoe UI", 10F, FontStyle.Bold);
+        var fTitle = GF("Segoe UI", 10F, FontStyle.Bold);
         var bGold = Gdi.GetBrush(DarkGold);
             g.DrawString("T-RAMCASH", fTitle, bGold, 46, 13);
 
-        var fSub = Gdi.GetFont("Segoe UI", 8.5F);
+        var fSub = GF("Segoe UI", 8.5F);
         var bMuted = Gdi.GetBrush(TextDim);
             g.DrawString("•  Hakkında", fSub, bMuted, 134, 14);
 
@@ -129,7 +152,7 @@ public class AboutForm : Form
             var bHover = Gdi.GetBrush(Color.FromArgb(28, 28, 36));
             g.FillRectangle(bHover, _rcClose);
         }
-        var font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Regular);
+        var font = GF("Segoe UI", 9F, FontStyle.Regular);
         var brush = Gdi.GetBrush(_hoverClose ? DarkGold : TextMuted);
         using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
         {
@@ -138,7 +161,7 @@ public class AboutForm : Form
 
         // İnce ayırıcı çizgi
         var penLine = Gdi.GetPen(CardBorder, 1);
-        g.DrawLine(penLine, 20, 42, Width - 20, 42);
+        g.DrawLine(penLine, 20, 42, LW - 20, 42);
     }
 
     void DrawCustomLogo(Graphics g, int x, int y, int s)
@@ -248,15 +271,15 @@ public class AboutForm : Form
         DrawCustomLogo(g, x + 12, y + 13, 48);
 
         int textX = x + 70;
-        var fBold = Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold);
+        var fBold = GF("Segoe UI", 9.5F, FontStyle.Bold);
         var bWhite = Gdi.GetBrush(TextWhite);
             g.DrawString("T-RamCash", fBold, bWhite, textX, y + 12);
 
-        var fDesc = Gdi.GetFont("Segoe UI", 8F);
+        var fDesc = GF("Segoe UI", 8F);
         var bMuted = Gdi.GetBrush(TextMuted);
             g.DrawString("Akıllı Bellek & Önbellek Yöneticisi", fDesc, bMuted, textX, y + 32);
 
-        var fVer = Gdi.GetFont("Segoe UI", 7.5F);
+        var fVer = GF("Segoe UI", 7.5F);
         var bDim = Gdi.GetBrush(DarkGold);
             g.DrawString("Sürüm " + TrayApp.Version + " • Windows x64", fVer, bDim, textX, y + 50);
     }
@@ -272,17 +295,17 @@ public class AboutForm : Form
             g.DrawRectangle(p, rc);
 
         // Instagram İkon / Rozet Metni
-        var fBadge = Gdi.GetFont("Segoe UI", 8F, FontStyle.Bold);
+        var fBadge = GF("Segoe UI", 8F, FontStyle.Bold);
         var bGold = Gdi.GetBrush(DarkGold);
             g.DrawString("INSTAGRAM", fBadge, bGold, rc.X + 14, rc.Y + 11);
 
         // Kullanıcı Adı: tdesk.studio
-        var fInsta = Gdi.GetFont("Segoe UI", 11F, FontStyle.Bold);
+        var fInsta = GF("Segoe UI", 11F, FontStyle.Bold);
         var bWhite = Gdi.GetBrush(_hoverInstagram ? DarkGoldHover : TextWhite);
             g.DrawString("@tdesk.studio", fInsta, bWhite, rc.X + 13, rc.Y + 28);
 
         // Sağdaki yönlendirme oku (➔)
-        var fArrow = Gdi.GetFont("Segoe UI", 11F);
+        var fArrow = GF("Segoe UI", 11F);
         var bArrow = Gdi.GetBrush(_hoverInstagram ? DarkGold : TextDim);
         using (var sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
         {
@@ -300,7 +323,7 @@ public class AboutForm : Form
             g.DrawRectangle(p, rc);
 
         // Üst Başlık (Küçük & Muted)
-        var fSub = Gdi.GetFont("Segoe UI", 7.5F);
+        var fSub = GF("Segoe UI", 7.5F);
         var bDim = Gdi.GetBrush(TextDim);
             g.DrawString("TASARIM & GELİŞTİRME", fSub, bDim, x + 14, y + 10);
 
@@ -320,7 +343,7 @@ public class AboutForm : Form
         var p = Gdi.GetPen(border, 1);
             g.DrawRectangle(p, rc);
 
-        var font = Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold);
+        var font = GF("Segoe UI", 8.5F, FontStyle.Bold);
         var brush = Gdi.GetBrush(_hoverBtnClose ? DarkGold : TextMuted);
         using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         g.DrawString("KAPAT", font, brush, rc, sf);
@@ -333,34 +356,34 @@ public class AboutForm : Form
         {
             try
             {
-                var f = new Font(name, size, FontStyle.Italic);
+                var f = new Font(name, size / _sc, FontStyle.Italic);
                 if (string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase))
                     return f;
                 f.Dispose();
             }
             catch { }
         }
-        return new Font("Segoe UI", size, FontStyle.Italic);
+        return new Font("Segoe UI", size / _sc, FontStyle.Italic);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
 
-        if (_rcClose.Contains(e.Location) || _rcBtnClose.Contains(e.Location))
+        if (_rcClose.Contains(LP(e.Location)) || _rcBtnClose.Contains(LP(e.Location)))
         {
             Close();
             return;
         }
 
-        if (_rcInstagram.Contains(e.Location))
+        if (_rcInstagram.Contains(LP(e.Location)))
         {
             OpenInstagram();
             return;
         }
 
         // Pencereyi sürükleme
-        if (e.Button == MouseButtons.Left && e.Y < 42)
+        if (e.Button == MouseButtons.Left && LP(e.Location).Y < 42)
         {
             ReleaseCapture();
             SendMessage(Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
@@ -371,9 +394,9 @@ public class AboutForm : Form
     {
         base.OnMouseMove(e);
 
-        bool newClose = _rcClose.Contains(e.Location);
-        bool newInsta = _rcInstagram.Contains(e.Location);
-        bool newBtnClose = _rcBtnClose.Contains(e.Location);
+        bool newClose = _rcClose.Contains(LP(e.Location));
+        bool newInsta = _rcInstagram.Contains(LP(e.Location));
+        bool newBtnClose = _rcBtnClose.Contains(LP(e.Location));
 
         if (newClose != _hoverClose || newInsta != _hoverInstagram || newBtnClose != _hoverBtnClose)
         {

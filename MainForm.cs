@@ -68,7 +68,9 @@ public class MainForm : Form
     readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
     readonly System.Windows.Forms.Timer _anim = new() { Interval = 16 };
     readonly Stopwatch _clock = Stopwatch.StartNew();
-    readonly Bitmap _logo;
+    Bitmap _logo;
+    RcLayout _L;
+    int S(int v) => _L.S(v);
     Icon _icon;
 
     // Yerlesim
@@ -95,7 +97,9 @@ public class MainForm : Form
             SetStyle(ControlStyles.Selectable | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(640, 265);
+            AutoScaleMode = AutoScaleMode.Dpi;
+            _L = RcLayout.Compute(DeviceDpi);
+            Size = new Size(_L.W, _L.H);
             BackColor = BgDark;
             TopMost = app.Settings.AlwaysOnTop;
             Text = "T-RamCash";
@@ -109,27 +113,14 @@ public class MainForm : Form
             }
             catch { }
 
-            _rcClose = new Rectangle(Width - 36, 12, 24, 22);
-            _rcMin = new Rectangle(Width - 66, 12, 24, 22);
-            _rcSettings = new Rectangle(Width - 96, 12, 24, 22);
-            _rcAbout = new Rectangle(Width - 126, 12, 24, 22);
-
-            // Sag kart: 430..620 (ic bosluk 16). Segmentli anahtar + temizle butonu
-            _rcToggle = new Rectangle(446, 112, 158, 26);
-            _rcSmart = new Rectangle(446, 112, 79, 26);
-            _rcFull = new Rectangle(525, 112, 79, 26);
-            _rcCleanBtn = new Rectangle(446, 148, 158, 44);
-            _rcAdmin = new Rectangle(446, 68, 158, 38);
+            SetLayoutRects();
             AccessibleName = "T-RamCash"; AccessibleRole = AccessibleRole.Window;
 
             _seg[0] = app.ManualMode == CleanMode.Smart ? 1f : 0f;
             _seg[1] = 1f - _seg[0];
 
-            using (var ptr = new RegionHandle(CreateRoundRectRgn(0, 0, Width, Height, 16, 16)))
-                Region = Region.FromHrgn(ptr.Handle);
-
-            _logo = new Bitmap(20, 20, PixelFormat.Format32bppPArgb);
-            using (var lg = Graphics.FromImage(_logo)) DrawCustomLogo(lg, 0, 0, 20);
+            ApplyRegion();
+            RebuildLogo();
 
             _refresh.Tick += (s, e) => RefreshData();
             _anim.Tick += (s, e) => AnimTick();
@@ -140,6 +131,51 @@ public class MainForm : Form
             UpdateTimers();
         }
         catch { Gdi.Release(); throw; }
+    }
+
+    void SetLayoutRects()
+    {
+        _rcClose = _L.Close; _rcMin = _L.Min; _rcSettings = _L.Settings; _rcAbout = _L.About;
+        _rcToggle = _L.Toggle; _rcSmart = _L.Smart; _rcFull = _L.Full; _rcCleanBtn = _L.CleanBtn; _rcAdmin = _L.Admin;
+    }
+
+    void ApplyRegion()
+    {
+        int rr = S(16);
+        using var ptr = new RegionHandle(CreateRoundRectRgn(0, 0, Width + 1, Height + 1, rr, rr));
+        var old = Region;
+        Region = Region.FromHrgn(ptr.Handle);
+        old?.Dispose();
+    }
+
+    void RebuildLogo()
+    {
+        _logo?.Dispose();
+        int ls = S(20);
+        _logo = new Bitmap(ls, ls, PixelFormat.Format32bppPArgb);
+        using var lg = Graphics.FromImage(_logo);
+        DrawCustomLogo(lg, 0, 0, ls);
+    }
+
+    // PerMonitorV2: monitor DPI degisince tum yerlesim, onbellekler ve pencere boyutu yeniden hesaplanir.
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        base.OnDpiChanged(e);
+        if (IsHandleCreated) BeginInvoke(new Action(ApplyDpi)); else ApplyDpi();
+    }
+
+    void ApplyDpi()
+    {
+        if (IsDisposed) return;
+        _L = RcLayout.Compute(DeviceDpi);
+        SetLayoutRects();
+        Gdi.ResetScaled();
+        if (Size != new Size(_L.W, _L.H)) Size = new Size(_L.W, _L.H);
+        ApplyRegion();
+        RebuildLogo();
+        _toastStart = -1;
+        _toastRect = Rectangle.Empty;
+        Invalidate();
     }
 
     sealed class RegionHandle : IDisposable
@@ -219,8 +255,8 @@ public class MainForm : Form
         _sPage = $"{s.UsedPageFileBytes / GB:F1} GB  /  {s.TotalPageFileBytes / GB:F1} GB";
         _sCache = $"Sistem Cache: {s.SystemCacheBytes / (1024.0 * 1024.0):F0} MB";
         _sInfo = $"● {status}  ·  {s.ProcessCount} Aktif Süreç";
-        Invalidate(new Rectangle(170, 8, Width - 340, 30)); // bilgi satiri
-        Invalidate(new Rectangle(20, 56, 400, 185)); // bellek kartlari
+        Invalidate(_L.InfoInv); // bilgi satiri
+        Invalidate(_L.CardsInv); // bellek kartlari
     }
 
     #endregion
@@ -244,13 +280,13 @@ public class MainForm : Form
             ? $"{freed} · {r.Note}"
             : $"{freed} · {(r.Mode == CleanMode.Full ? "Tam" : "Akıllı")} · {r.DurationMs} ms";
         var sz = TextRenderer.MeasureText(_toastText, Gdi.GetFont("Segoe UI", 9f, FontStyle.Regular));
-        int w = Math.Min(Width - 32, sz.Width + 32);
+        int w = Math.Min(Width - S(32), sz.Width + S(32));
         var oldToast = _toastRect;
-        _toastRect = new Rectangle((Width - w) / 2, Height - 16 - 34, w, 34);
+        _toastRect = new Rectangle((Width - w) / 2, Height - S(16) - S(34), w, S(34));
         _toastStart = _clock.ElapsedMilliseconds;
         EnsureAnim();
-        if (!oldToast.IsEmpty) Invalidate(Rectangle.Inflate(oldToast, 4, 14));
-        Invalidate(Rectangle.Inflate(_toastRect, 4, 14));
+        if (!oldToast.IsEmpty) Invalidate(Rectangle.Inflate(oldToast, S(4), S(14)));
+        Invalidate(Rectangle.Inflate(_toastRect, S(4), S(14)));
     }
 
     #endregion
@@ -281,9 +317,9 @@ public class MainForm : Form
         bool toastEnding = _toastStart >= 0 && now - _toastStart > ToastIn + ToastHold + ToastOut;
         if (toastEnding) _toastStart = -1;
 
-        Invalidate(Rectangle.Inflate(_rcToggle, 2, 2));
-        Invalidate(Rectangle.Inflate(_rcCleanBtn, 2, 2));
-        if (!_toastRect.IsEmpty) Invalidate(Rectangle.Inflate(_toastRect, 4, 14));
+        Invalidate(Rectangle.Inflate(_rcToggle, S(2), S(2)));
+        Invalidate(Rectangle.Inflate(_rcCleanBtn, S(2), S(2)));
+        if (!_toastRect.IsEmpty) Invalidate(Rectangle.Inflate(_toastRect, S(4), S(14)));
         if (!NeedsAnim()) _anim.Stop();
     }
 
@@ -304,25 +340,25 @@ public class MainForm : Form
         g.DrawRectangle(Gdi.GetPen(CardBorder), 0, 0, Width - 1, Height - 1);
 
         DrawHorizontalHeader(g);
-        DrawColumn(g, 20, 56, 195, 185, "FİZİKSEL BELLEK", _sPct, _sUsed, _app.Snap.MemoryLoadPercent, _sFree);
-        DrawColumn(g, 225, 56, 195, 185, "SANAL & ÖNBELLEK", _sPagePct, _sPage, _app.Snap.PageFileLoadPercent, _sCache);
-        DrawColumnAction(g, 430, 56, 190, 185);
+        DrawColumn(g, _L.Card1, "FİZİKSEL BELLEK", _sPct, _sUsed, _app.Snap.MemoryLoadPercent, _sFree);
+        DrawColumn(g, _L.Card2, "SANAL & ÖNBELLEK", _sPagePct, _sPage, _app.Snap.PageFileLoadPercent, _sCache);
+        DrawColumnAction(g, _L.Card3);
         if (_toastStart >= 0) DrawToast(g);
         DrawFocus(g);
     }
 
     void DrawHorizontalHeader(Graphics g)
     {
-        g.DrawImageUnscaled(_logo, 20, 12);
-        g.DrawString("T-RAMCASH", Gdi.GetFont("Segoe UI", 10.5F, FontStyle.Bold), Gdi.GetBrush(DarkGold), 48, 12);
-        g.DrawString(_sInfo, Gdi.GetFont("Segoe UI", 8.5F), Gdi.GetBrush(TextDim), 175, 14);
+        g.DrawImageUnscaled(_logo, S(20), S(12));
+        g.DrawString("T-RAMCASH", Gdi.GetFont("Segoe UI", 10.5F, FontStyle.Bold), Gdi.GetBrush(DarkGold), S(48), S(12));
+        DrawFit(g, _sInfo, 8.5F, FontStyle.Regular, TextDim, _L.InfoText, Gdi.VCenterLeft);
 
-        DrawNormalBtn(g, _rcAbout, "ℹ", _hover == HAbout);
-        DrawNormalBtn(g, _rcSettings, "⚙", _hover == HSettings);
-        DrawNormalBtn(g, _rcMin, "—", _hover == HMin);
-        DrawNormalBtn(g, _rcClose, "✕", _hover == HClose);
+        DrawNormalBtn(g, _rcAbout, HAbout, _hover == HAbout);
+        DrawNormalBtn(g, _rcSettings, HSettings, _hover == HSettings);
+        DrawNormalBtn(g, _rcMin, HMin, _hover == HMin);
+        DrawNormalBtn(g, _rcClose, HClose, _hover == HClose);
 
-        g.DrawLine(Gdi.GetPen(CardBorder), 20, 44, Width - 20, 44);
+        g.DrawLine(Gdi.GetPen(CardBorder), S(20), S(44), Width - S(20), S(44));
     }
 
     void DrawCustomLogo(Graphics g, int x, int y, int s)
@@ -384,60 +420,118 @@ public class MainForm : Form
         return path;
     }
 
-    void DrawNormalBtn(Graphics g, Rectangle rc, string text, bool hover)
+    // Baslik dugmesi simgeleri: yazi tipi glifi yerine vektor cizim (Segoe UI Symbol yoksa bile gorunur).
+    void DrawNormalBtn(Graphics g, Rectangle rc, int id, bool hover)
     {
         if (hover) g.FillRectangle(Gdi.GetBrush(Surface), rc);
-        g.DrawString(text, Gdi.GetFont("Segoe UI", 9F), Gdi.GetBrush(hover ? DarkGold : TextMuted), rc, Gdi.Center);
+        var col = hover ? DarkGold : TextMuted;
+        float lw = Math.Max(1.25f, S(2) * 0.7f);
+        var pen = Gdi.GetPen(col, lw);
+        pen.StartCap = pen.EndCap = LineCap.Round;
+        pen.LineJoin = LineJoin.Round;
+        float cx = rc.X + rc.Width / 2f, cy = rc.Y + rc.Height / 2f;
+        float u = S(1);
+        switch (id)
+        {
+            case HClose:
+                g.DrawLine(pen, cx - 4.5f * u, cy - 4.5f * u, cx + 4.5f * u, cy + 4.5f * u);
+                g.DrawLine(pen, cx - 4.5f * u, cy + 4.5f * u, cx + 4.5f * u, cy - 4.5f * u);
+                break;
+            case HMin:
+                g.DrawLine(pen, cx - 5f * u, cy, cx + 5f * u, cy);
+                break;
+            case HAbout:
+                g.DrawEllipse(pen, cx - 6f * u, cy - 6f * u, 12f * u, 12f * u);
+                g.DrawLine(pen, cx, cy - 0.5f * u, cx, cy + 3f * u);
+                g.FillEllipse(Gdi.GetBrush(col), cx - 1f * u, cy - 3.8f * u, 2f * u, 2f * u);
+                break;
+            case HSettings:
+                using (var gp = GearPath(cx, cy, 6.5f * u, 4.6f * u, 8)) g.DrawPath(pen, gp);
+                g.DrawEllipse(pen, cx - 2f * u, cy - 2f * u, 4f * u, 4f * u);
+                break;
+        }
     }
 
-    void DrawColumn(Graphics g, int x, int y, int w, int h, string title, string pct, string sub, uint load, string foot)
+    static GraphicsPath GearPath(float cx, float cy, float ro, float ri, int teeth)
     {
-        FillCard(g, new Rectangle(x, y, w, h));
-        g.DrawString(title, Gdi.GetFont("Segoe UI", 8F, FontStyle.Bold), Gdi.GetBrush(TextMuted), x + 16, y + 16);
-        g.DrawString(pct, Gdi.GetFont("Segoe UI", 24F, FontStyle.Bold), Gdi.GetBrush(TextWhite), x + 14, y + 36);
-        g.DrawString(sub, Gdi.GetFont("Segoe UI", 8.5F), Gdi.GetBrush(TextMuted), x + 16, y + 88);
+        var path = new GraphicsPath();
+        var pts = new PointF[teeth * 4];
+        double step = Math.PI * 2 / teeth;
+        for (int i = 0; i < teeth; i++)
+        {
+            double a = i * step - step / 2;
+            double[] ang = { a + step * 0.12, a + step * 0.30, a + step * 0.62, a + step * 0.80 };
+            float[] rad = { ri, ro, ro, ri };
+            for (int k = 0; k < 4; k++)
+                pts[i * 4 + k] = new PointF(cx + (float)(Math.Cos(ang[k]) * rad[k]), cy + (float)(Math.Sin(ang[k]) * rad[k]));
+        }
+        path.AddPolygon(pts);
+        return path;
+    }
 
-        int barW = w - 32, barY = y + 114;
-        g.FillRectangle(Gdi.GetBrush(Color.FromArgb(30, 30, 38)), x + 16, barY, barW, 4);
+    /// <summary>Metni kutuya sigdirarak cizer: sigmazsa yazi tipi 0,5 pt adimlarla kuculur (en az 6 pt).</summary>
+    void DrawFit(Graphics g, string text, float pt, FontStyle st, Color c, RectangleF box, StringFormat fmt)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        var f = Gdi.FitFont(g, text, "Segoe UI", pt, st, box.Width);
+        g.DrawString(text, f, Gdi.GetBrush(c), box, fmt);
+    }
+
+    void DrawColumn(Graphics g, Rectangle card, string title, string pct, string sub, uint load, string foot)
+    {
+        int x = card.X, y = card.Y, w = card.Width;
+        FillCard(g, card);
+        int pad = S(16);
+        float inner = w - 2 * pad;
+        DrawFit(g, title, 8F, FontStyle.Bold, TextMuted, new RectangleF(x + pad, y + S(16), inner, S(18)), Gdi.TopLeft);
+        DrawFit(g, pct, 24F, FontStyle.Bold, TextWhite, new RectangleF(x + S(14), y + S(36), inner + S(2), S(48)), Gdi.TopLeft);
+        DrawFit(g, sub, 8.5F, FontStyle.Regular, TextMuted, new RectangleF(x + pad, y + S(88), inner, S(22)), Gdi.TopLeft);
+
+        int barW = w - 2 * pad, barY = y + S(114), barH = Math.Max(2, S(4));
+        g.FillRectangle(Gdi.GetBrush(Color.FromArgb(30, 30, 38)), x + pad, barY, barW, barH);
         int fillW = (int)((barW * Math.Min(100u, load)) / 100.0);
-        if (fillW > 0) g.FillRectangle(Gdi.GetBrush(DarkGold), x + 16, barY, fillW, 4);
+        if (fillW > 0) g.FillRectangle(Gdi.GetBrush(DarkGold), x + pad, barY, fillW, barH);
 
-        g.DrawString(foot, Gdi.GetFont("Segoe UI", 8.5F), Gdi.GetBrush(TextDim), x + 16, y + 140);
+        DrawFit(g, foot, 8.5F, FontStyle.Regular, TextDim, new RectangleF(x + pad, y + S(140), inner, S(22)), Gdi.TopLeft);
     }
 
-    void DrawColumnAction(Graphics g, int x, int y, int w, int h)
+    void DrawColumnAction(Graphics g, Rectangle card)
     {
-        FillCard(g, new Rectangle(x, y, w, h));
+        int x = card.X, y = card.Y, w = card.Width;
+        int pad = S(16);
+        float inner = w - 2 * pad;
+        FillCard(g, card);
         bool admin = MemoryCleaner.IsAdministrator;
 
-        g.DrawString(admin ? "● YÖNETİCİ MODU" : "○ STANDART MOD", Gdi.GetFont("Segoe UI", 8F, FontStyle.Bold),
-            Gdi.GetBrush(admin ? DarkGold : TextMuted), x + 16, y + 16);
-        g.DrawString(admin ? "Tam önbellek yetkili" : "Yönetici ile tam yetki", Gdi.GetFont("Segoe UI", 7.5F),
-            Gdi.GetBrush(TextDim), x + 16, y + 34);
+        DrawFit(g, admin ? "● YÖNETİCİ MODU" : "○ STANDART MOD", 8F, FontStyle.Bold, admin ? DarkGold : TextMuted,
+            new RectangleF(x + pad, y + S(16), inner, S(18)), Gdi.TopLeft);
+        DrawFit(g, admin ? "Tam önbellek yetkili" : "Yönetici ile tam yetki", 7.5F, FontStyle.Regular, TextDim,
+            new RectangleF(x + pad, y + S(34), inner, S(14)), Gdi.TopLeft);
 
         if (!admin)
-            g.DrawString("▸ Yönetici olarak yeniden başlat", Gdi.GetFont("Segoe UI", 7F, FontStyle.Underline), Gdi.GetBrush(_hover == HAdmin ? TextWhite : DarkGold), x + 16, y + 48);
+            DrawFit(g, "▸ Yönetici olarak yeniden başlat", 7F, FontStyle.Underline, _hover == HAdmin ? TextWhite : DarkGold,
+                new RectangleF(x + pad, y + S(48), inner, S(16)), Gdi.TopLeft);
         DrawToggle(g);
         DrawCleanButton(g);
 
-        g.DrawString(_app.HotkeyOk ? "Kısayol: Ctrl + F1" : "Kısayol kullanılamıyor (başka uygulama kullanıyor)", Gdi.GetFont("Segoe UI", 8F), Gdi.GetBrush(TextDim),
-            new RectangleF(x, y + 148, w, 18), Gdi.HCenter);
+        DrawFit(g, _app.HotkeyOk ? "Kısayol: Ctrl + F1" : "Kısayol kullanılamıyor (başka uygulama kullanıyor)", 8F, FontStyle.Regular, TextDim,
+            new RectangleF(x, y + S(148), w, S(32)), Gdi.HCenter);
     }
 
     // Segmentli anahtar: [ Akıllı | Tam ]
     void DrawToggle(Graphics g)
     {
-        g.FillPath(Gdi.GetBrush(BgDark), Gdi.RoundedPath(_rcToggle, 8));
-        g.DrawPath(Gdi.GetPen(CardBorder), Gdi.RoundedPath(_rcToggle, 8));
+        g.FillPath(Gdi.GetBrush(BgDark), Gdi.RoundedPath(_rcToggle, S(8)));
+        g.DrawPath(Gdi.GetPen(CardBorder), Gdi.RoundedPath(_rcToggle, S(8)));
         DrawSegment(g, _rcSmart, "Akıllı", _seg[0], _hover == HSmart);
         DrawSegment(g, _rcFull, "Tam", _seg[1], _hover == HFull);
     }
 
     void DrawSegment(Graphics g, Rectangle r, string text, float t, bool hover)
     {
-        var inner = Rectangle.Inflate(r, -3, -3);
+        var inner = Rectangle.Inflate(r, -S(3), -S(3));
         if (t > 0.01f)
-            g.FillPath(Gdi.GetBrush(Color.FromArgb((int)(255 * t), DarkGold)), Gdi.RoundedPath(inner, 6));
+            g.FillPath(Gdi.GetBrush(Color.FromArgb((int)(255 * t), DarkGold)), Gdi.RoundedPath(inner, S(6)));
         Color unselected = hover ? TextWhite : TextMuted;
         g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), Gdi.GetBrush(Gdi.Lerp(unselected, BgDark, t)), r, Gdi.Center);
     }
@@ -445,7 +539,7 @@ public class MainForm : Form
     void DrawCleanButton(Graphics g)
     {
         var r = _rcCleanBtn;
-        var path = Gdi.RoundedPath(r, 8);
+        var path = Gdi.RoundedPath(r, S(8));
         if (_app.IsCleaning)
         {
             g.FillPath(Gdi.GetBrush(Surface), path);
@@ -454,11 +548,12 @@ public class MainForm : Form
 
             // Animasyonlu altin alt cizgi: etiketin altinda soldan saga kayan segment
             float phase = (_clock.ElapsedMilliseconds % 1100) / 1100f;
-            int span = r.Width - 24, segW = span / 3;
-            int sx = r.X + 12 + (int)((span + segW) * phase) - segW;
-            int x0 = Math.Max(sx, r.X + 12), x1 = Math.Min(sx + segW, r.X + 12 + span);
-            g.DrawLine(Gdi.GetPen(CardBorder, 2f), r.X + 12, r.Bottom - 10, r.X + 12 + span, r.Bottom - 10);
-            if (x1 > x0) g.DrawLine(Gdi.GetPen(DarkGold, 2f), x0, r.Bottom - 10, x1, r.Bottom - 10);
+            int span = r.Width - S(24), segW = span / 3;
+            int sx = r.X + S(12) + (int)((span + segW) * phase) - segW;
+            int x0 = Math.Max(sx, r.X + S(12)), x1 = Math.Min(sx + segW, r.X + S(12) + span);
+            float lw = Math.Max(2f, S(2));
+            g.DrawLine(Gdi.GetPen(CardBorder, lw), r.X + S(12), r.Bottom - S(10), r.X + S(12) + span, r.Bottom - S(10));
+            if (x1 > x0) g.DrawLine(Gdi.GetPen(DarkGold, lw), x0, r.Bottom - S(10), x1, r.Bottom - S(10));
         }
         else
         {
@@ -477,11 +572,11 @@ public class MainForm : Form
         else a = 1f - (dt - ToastIn - ToastHold) / (float)ToastOut;
         a = Math.Clamp(a, 0f, 1f);
         float ease = 1f - (1f - Math.Min(1f, dt / (float)ToastIn)) * (1f - Math.Min(1f, dt / (float)ToastIn));
-        int dy = (int)Math.Round(8 * (1f - ease));
+        int dy = (int)Math.Round(S(8) * (1f - ease));
         int alpha = (int)(255 * a);
 
         var r = new Rectangle(_toastRect.X, _toastRect.Y + dy, _toastRect.Width, _toastRect.Height);
-        var path = Gdi.RoundedPath(r, 8);
+        var path = Gdi.RoundedPath(r, S(8));
         g.FillPath(Gdi.GetBrush(Color.FromArgb(alpha, CardBg)), path);
         g.DrawPath(Gdi.GetPen(Color.FromArgb(alpha, DarkGold)), path);
         g.DrawString(_toastText, Gdi.GetFont("Segoe UI", 9F), Gdi.GetBrush(Color.FromArgb(alpha, TextWhite)), r, Gdi.Center);
@@ -544,7 +639,7 @@ public class MainForm : Form
         int id = HitTest(e.Location);
         if (id != HNone) { SetFocusItem(HNone); ActivateItem(id); return; }
 
-        if (e.Y < 46)
+        if (e.Y < S(46))
         {
             ReleaseCapture();
             SendMessage(Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
@@ -557,9 +652,9 @@ public class MainForm : Form
         if (_focus == id) return;
         var old = RectOf(_focus);
         _focus = id;
-        if (!old.IsEmpty) Invalidate(Rectangle.Inflate(old, 4, 4));
+        if (!old.IsEmpty) Invalidate(Rectangle.Inflate(old, S(4), S(4)));
         var nr = RectOf(id);
-        if (!nr.IsEmpty) { Invalidate(Rectangle.Inflate(nr, 4, 4)); ShowTip(id); }
+        if (!nr.IsEmpty) { Invalidate(Rectangle.Inflate(nr, S(4), S(4))); ShowTip(id); }
     }
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -588,8 +683,8 @@ public class MainForm : Form
     void DrawFocus(Graphics g)
     {
         if (_focus == HNone) return;
-        var r = Rectangle.Inflate(RectOf(_focus), 2, 2);
-        g.DrawPath(Gdi.GetPen(DarkGold, 1.5f), Gdi.RoundedPath(r, 8));
+        var r = Rectangle.Inflate(RectOf(_focus), S(2), S(2));
+        g.DrawPath(Gdi.GetPen(DarkGold, 1.5f), Gdi.RoundedPath(r, S(8)));
     }
 
     void ShowTip(int id)
@@ -598,7 +693,7 @@ public class MainForm : Form
         if (t.Length == 0) return;
         _tip ??= new ToolTip { InitialDelay = 0, ReshowDelay = 0 };
         var r = RectOf(id);
-        _tip.Show(t, this, r.X, r.Bottom + 4, 1500);
+        _tip.Show(t, this, r.X, r.Bottom + S(4), 1500);
     }
 
     // ---- Erisilebilirlik ----
@@ -638,16 +733,16 @@ public class MainForm : Form
             var o = RectOf(_hover);
             _hover = h;
             Cursor = h != HNone ? Cursors.Hand : Cursors.Default;
-            if (!o.IsEmpty) Invalidate(Rectangle.Inflate(o, 4, 4));
+            if (!o.IsEmpty) Invalidate(Rectangle.Inflate(o, S(4), S(4)));
             var n = RectOf(h);
-            if (!n.IsEmpty) { Invalidate(Rectangle.Inflate(n, 4, 4)); ShowTip(h); }
+            if (!n.IsEmpty) { Invalidate(Rectangle.Inflate(n, S(4), S(4))); ShowTip(h); }
         }
     }
 
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
-        if (_hover != HNone) { var o = RectOf(_hover); _hover = HNone; Invalidate(Rectangle.Inflate(o, 4, 4)); }
+        if (_hover != HNone) { var o = RectOf(_hover); _hover = HNone; Invalidate(Rectangle.Inflate(o, S(4), S(4))); }
     }
 
     #endregion
