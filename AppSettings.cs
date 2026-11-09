@@ -72,6 +72,7 @@ public class AppSettings
         }
         catch
         {
+            try { File.Copy(ConfigPath, ConfigPath + ".bad", true); } catch { }
         }
         return new AppSettings();
     }
@@ -94,7 +95,8 @@ public class AppSettings
                 Directory.CreateDirectory(ConfigDir);
             }
             string json = JsonSerializer.Serialize(this, SettingsJsonContext.Default.AppSettings);
-            File.WriteAllText(ConfigPath, json);
+            File.WriteAllText(ConfigPath + ".tmp", json);
+            File.Move(ConfigPath + ".tmp", ConfigPath, true);
 
             // Startup registry check
             using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);

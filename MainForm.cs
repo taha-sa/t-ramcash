@@ -86,50 +86,54 @@ public class MainForm : Form
         _app = app;
         Gdi.Acquire();
 
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-        FormBorderStyle = FormBorderStyle.None;
-        StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(640, 265);
-        BackColor = BgDark;
-        TopMost = app.Settings.AlwaysOnTop;
-        Text = "T-RamCash";
-        ShowInTaskbar = true;
-
         try
         {
-            string icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico");
-            if (System.IO.File.Exists(icoPath)) _icon = new Icon(icoPath, 32, 32);
-            if (_icon != null) Icon = _icon;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            FormBorderStyle = FormBorderStyle.None;
+            StartPosition = FormStartPosition.CenterScreen;
+            Size = new Size(640, 265);
+            BackColor = BgDark;
+            TopMost = app.Settings.AlwaysOnTop;
+            Text = "T-RamCash";
+            ShowInTaskbar = true;
+
+            try
+            {
+                string icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico");
+                if (System.IO.File.Exists(icoPath)) _icon = new Icon(icoPath, 32, 32);
+                if (_icon != null) Icon = _icon;
+            }
+            catch { }
+
+            _rcClose = new Rectangle(Width - 36, 12, 24, 22);
+            _rcMin = new Rectangle(Width - 66, 12, 24, 22);
+            _rcSettings = new Rectangle(Width - 96, 12, 24, 22);
+            _rcAbout = new Rectangle(Width - 126, 12, 24, 22);
+
+            // Sag kart: 430..620 (ic bosluk 16). Segmentli anahtar + temizle butonu
+            _rcToggle = new Rectangle(446, 112, 158, 26);
+            _rcSmart = new Rectangle(446, 112, 79, 26);
+            _rcFull = new Rectangle(525, 112, 79, 26);
+            _rcCleanBtn = new Rectangle(446, 148, 158, 44);
+
+            _seg[0] = app.ManualMode == CleanMode.Smart ? 1f : 0f;
+            _seg[1] = 1f - _seg[0];
+
+            using (var ptr = new RegionHandle(CreateRoundRectRgn(0, 0, Width, Height, 16, 16)))
+                Region = Region.FromHrgn(ptr.Handle);
+
+            _logo = new Bitmap(20, 20, PixelFormat.Format32bppPArgb);
+            using (var lg = Graphics.FromImage(_logo)) DrawCustomLogo(lg, 0, 0, 20);
+
+            _refresh.Tick += (s, e) => RefreshData();
+            _anim.Tick += (s, e) => AnimTick();
+            _app.CleaningChanged += OnCleaningChanged;
+            _app.CleanCompleted += OnCleanCompleted;
+
+            RefreshData();
+            UpdateTimers();
         }
-        catch { }
-
-        _rcClose = new Rectangle(Width - 36, 12, 24, 22);
-        _rcMin = new Rectangle(Width - 66, 12, 24, 22);
-        _rcSettings = new Rectangle(Width - 96, 12, 24, 22);
-        _rcAbout = new Rectangle(Width - 126, 12, 24, 22);
-
-        // Sag kart: 430..620 (ic bosluk 16). Segmentli anahtar + temizle butonu
-        _rcToggle = new Rectangle(446, 112, 158, 26);
-        _rcSmart = new Rectangle(446, 112, 79, 26);
-        _rcFull = new Rectangle(525, 112, 79, 26);
-        _rcCleanBtn = new Rectangle(446, 148, 158, 44);
-
-        _seg[0] = app.ManualMode == CleanMode.Smart ? 1f : 0f;
-        _seg[1] = 1f - _seg[0];
-
-        using (var ptr = new RegionHandle(CreateRoundRectRgn(0, 0, Width, Height, 16, 16)))
-            Region = Region.FromHrgn(ptr.Handle);
-
-        _logo = new Bitmap(20, 20, PixelFormat.Format32bppPArgb);
-        using (var lg = Graphics.FromImage(_logo)) DrawCustomLogo(lg, 0, 0, 20);
-
-        _refresh.Tick += (s, e) => RefreshData();
-        _anim.Tick += (s, e) => AnimTick();
-        _app.CleaningChanged += OnCleaningChanged;
-        _app.CleanCompleted += OnCleanCompleted;
-
-        RefreshData();
-        UpdateTimers();
+        catch { Gdi.Release(); throw; }
     }
 
     sealed class RegionHandle : IDisposable
@@ -393,7 +397,7 @@ public class MainForm : Form
         DrawToggle(g);
         DrawCleanButton(g);
 
-        g.DrawString("Kısayol: Ctrl + F1", Gdi.GetFont("Segoe UI", 8F), Gdi.GetBrush(TextDim),
+        g.DrawString(_app.HotkeyOk ? "Kısayol: Ctrl + F1" : "Kısayol kullanılamıyor (başka uygulama kullanıyor)", Gdi.GetFont("Segoe UI", 8F), Gdi.GetBrush(TextDim),
             new RectangleF(x, y + 148, w, 18), Gdi.HCenter);
     }
 
@@ -485,6 +489,7 @@ public class MainForm : Form
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left) return;
         switch (HitTest(e.Location))
         {
             case HClose: BeginInvoke(new Action(_app.HideMain)); return; // bu formu Dispose eder

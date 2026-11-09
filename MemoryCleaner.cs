@@ -322,8 +322,21 @@ public static class MemoryCleaner
     }
 
     /// <summary>Hic hariç tutulmayan sürecler: kendimiz, ön plan, T-Suite uygulamaları, ayardaki hariç listesi, PID &lt;= 4.</summary>
+    static HashSet<string>? _exCache;
+    static HashSet<uint>? _exPids;
+    static long _exTick;
+
+    /// <summary>Ayar kaydedilince cagrilir; bir sonraki temizlikte liste yeniden olusur.</summary>
+    public static void InvalidateExcludeCache() => _exCache = null;
+
     static HashSet<string> BuildExcludedNames(AppSettings settings, out HashSet<uint> excludedPids)
     {
+        if (_exCache != null && _exPids != null && Environment.TickCount64 - _exTick < 30000)
+        {
+            excludedPids = _exPids;
+            return _exCache;
+        }
+
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         excludedPids = new HashSet<uint> { (uint)Environment.ProcessId };
 
@@ -347,6 +360,9 @@ public static class MemoryCleaner
                 excludedPids.Add(fgPid);
         }
         catch { }
+        _exCache = names;
+        _exPids = excludedPids;
+        _exTick = Environment.TickCount64;
         return names;
     }
 

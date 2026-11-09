@@ -48,6 +48,11 @@ if ($ArtifactAs.EndsWith('.zip')) {
 } else {
   Copy-Item (Join-Path $pub $ExeName) $artifact
 }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zipCheck = [IO.Compression.ZipFile]::OpenRead($artifact)
+try {
+  if (-not ($zipCheck.Entries | Where-Object { $_.Name -eq 'TSuite.Updater.exe' })) { throw "Updater zip'te yok" }
+} finally { $zipCheck.Dispose() }
 
 $sha = (Get-FileHash $artifact -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host "==> sha256 $sha"

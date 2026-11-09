@@ -285,6 +285,7 @@ public class SettingsForm : Form
         btnSave.FlatAppearance.BorderSize = 0;
         btnSave.Click += (s, e) => SaveChanges();
         Controls.Add(btnSave);
+        AcceptButton = btnSave;
     }
 
     static Button MakeGhostButton(string text, Rectangle r)
@@ -358,6 +359,7 @@ public class SettingsForm : Form
         _settings.WarningLevel = (int)numWarning.Value;
         _settings.DangerLevel = (int)numDanger.Value;
 
+        MemoryCleaner.InvalidateExcludeCache();
         _settings.Save();
     }
 }

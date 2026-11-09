@@ -39,6 +39,7 @@ public sealed class TrayApp : ApplicationContext
     public MemoryCleaner.MemorySnapshot Snap;
     public string StatusText { get; private set; } = "Sistem izleniyor • Hazır";
     public bool IsCleaning { get; private set; }
+    public bool HotkeyOk;
 
     public event Action CleaningChanged;
     public event Action<CleanResult> CleanCompleted;
@@ -104,7 +105,7 @@ public sealed class TrayApp : ApplicationContext
         UpdateTrayIcon();
 
         _hot.Create();
-        RegisterHotKey(_hot.Handle, HOTKEY_ID, MOD_CONTROL, VK_F1);
+        HotkeyOk = RegisterHotKey(_hot.Handle, HOTKEY_ID, MOD_CONTROL, VK_F1);
         _hot.HotKey += () => RequestClean(ManualMode, false);
 
         _tick.Tick += (s, e) => OnTick();

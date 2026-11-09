@@ -16,7 +16,7 @@
     <!-- Bellek: workstation + non-concurrent GC (ek GC thread'i ve arka plan yigini yok), PGO acik -->
     <ServerGarbageCollector>false</ServerGarbageCollector>
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
-    <TieredPGO>true</TieredPGO>
+    <TieredPGO>false</TieredPGO>
     <TieredCompilation>true</TieredCompilation>
     <!-- InvariantGlobalization KAPALI: arayuz Turkce kulturde ondalik (1,2 GB) bicimlendirir. -->
     <InvariantGlobalization>false</InvariantGlobalization>
