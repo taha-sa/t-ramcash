@@ -56,10 +56,6 @@ public sealed class TrayApp : ApplicationContext
     readonly ContextMenuStrip _menu;
     readonly ToolStripMenuItem _menuHeader;
     readonly System.Windows.Forms.Timer _tick = new() { Interval = 5000 };
-    readonly Bitmap _iconBmp = new(32, 32);
-    readonly Graphics _iconG;
-    readonly Font _iconFont = new("Segoe UI", 15.5f, FontStyle.Bold);
-    readonly StringFormat _iconSf = new() { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
     readonly AppRegistry _registry = new();
     readonly EventWaitHandle _showEvent;
     LinkServer _link;
@@ -75,10 +71,6 @@ public sealed class TrayApp : ApplicationContext
         _showEvent = showEvent;
         Settings = AppSettings.Load();
         MemoryCleaner.ReadSnapshot(ref Snap);
-
-        _iconG = Graphics.FromImage(_iconBmp);
-        _iconG.SmoothingMode = SmoothingMode.AntiAlias;
-        _iconG.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
         _menuHeader = new ToolStripMenuItem("T-RamCash") { ForeColor = Color.DarkGoldenrod };
         _menuHeader.Font = new Font(SystemFonts.MenuFont, FontStyle.Bold);
@@ -166,11 +158,9 @@ public sealed class TrayApp : ApplicationContext
         _lastIconPct = pct;
         try
         {
-            _iconG.Clear(Color.FromArgb(14, 14, 18));
-            _iconG.DrawRectangle(Gdi_Pen, 1, 1, 29, 29);
-            _iconG.DrawString(pct.ToString(), _iconFont, Brushes.White, new RectangleF(0, 0, 32, 32), _iconSf);
-
-            IntPtr hIcon = _iconBmp.GetHicon();
+            // Sistem kucuk-ikon boyutunda dogrudan ciz (16/20/24/32), kucultme yok.
+            using var bmp = TrayIconRender.Render(TrayIconRender.IconSize(), pct, out _);
+            IntPtr hIcon = bmp.GetHicon();
             Icon newIcon;
             try { using var tmp = Icon.FromHandle(hIcon); newIcon = (Icon)tmp.Clone(); }
             finally { DestroyIcon(hIcon); }
@@ -183,8 +173,6 @@ public sealed class TrayApp : ApplicationContext
         }
         catch { }
     }
-
-    static readonly Pen Gdi_Pen = new(Color.FromArgb(212, 160, 23), 1.5f);
 
     #endregion
 

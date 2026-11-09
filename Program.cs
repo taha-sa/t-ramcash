@@ -24,6 +24,12 @@ static class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "--tray-test")
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ramcash-tray-test.txt"), TrayIconRender.SelfTest());
+            return;
+        }
+
         // Komut satırından sessiz temizleme (--clean veya -c): Tam mod
         if (args.Length > 0 && (args[0] == "--clean" || args[0] == "-c"))
         {
