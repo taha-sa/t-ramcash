@@ -55,7 +55,7 @@ public class AppSettings
             if (File.Exists(ConfigPath))
             {
                 string json = File.ReadAllText(ConfigPath);
-                return JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+                return Normalize(JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings) ?? new AppSettings());
             }
 
             // 2. Yeni dosya yoksa, eski yoldan ayarları otomatik taşı (Migration)
@@ -66,7 +66,7 @@ public class AppSettings
                 if (legacySettings != null)
                 {
                     legacySettings.Save(); // Yeni yola kaydet ve Registry'i güncelle
-                    return legacySettings;
+                    return Normalize(legacySettings);
                 }
             }
         }
@@ -74,6 +74,15 @@ public class AppSettings
         {
         }
         return new AppSettings();
+    }
+
+    static AppSettings Normalize(AppSettings s)
+    {
+        s.AutoCleanRatioThreshold = Math.Clamp(s.AutoCleanRatioThreshold, 10, 99);
+        s.AutoCleanIntervalMinutes = Math.Clamp(s.AutoCleanIntervalMinutes, 1, 360);
+        s.WarningLevel = Math.Clamp(s.WarningLevel, 10, 95);
+        s.DangerLevel = Math.Clamp(s.DangerLevel, 20, 99);
+        return s;
     }
 
     public void Save()
