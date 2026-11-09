@@ -2,19 +2,22 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace TRamCash;
 
+/// <summary>
+/// Ana pencere. Yalnizca gorunurken yasar: gizlenince TrayApp tarafindan Dispose edilir.
+/// Tum GDI+ nesneleri Gdi onbelleginden gelir; boyama sirasinda nesne/string uretilmez.
+/// </summary>
 public class MainForm : Form
 {
-    #region Win32 P/Invoke & Window FX
+    #region Win32
 
     [DllImport("Gdi32.dll", EntryPoint = "CreateRoundRectRgn")]
-    static extern IntPtr CreateRoundRectRgn(
-        int nLeftRect, int nTopRect, int nRightRect, int nBottomRect,
-        int nWidthEllipse, int nHeightEllipse);
+    static extern IntPtr CreateRoundRectRgn(int l, int t, int r, int b, int w, int h);
 
     [DllImport("gdi32.dll")]
     static extern bool DeleteObject(IntPtr hObject);
@@ -25,38 +28,16 @@ public class MainForm : Form
     [DllImport("user32.dll")]
     static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
 
-    [DllImport("user32.dll")]
-    static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-    [DllImport("user32.dll")]
-    static extern bool UnregisterHotKey(IntPtr hWnd, int id);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    static extern bool DestroyIcon(IntPtr handle);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    static extern IntPtr SendMessage(IntPtr hWnd, int Msg, int wParam, IntPtr lParam);
-
-    const int WM_SETICON = 0x0080;
-    const int ICON_SMALL = 0;
-    const int ICON_BIG = 1;
-
     const int WM_NCLBUTTONDOWN = 0xA1;
     const int HT_CAPTION = 0x2;
-    const int HOTKEY_ID = 9000;
-    const uint MOD_CONTROL = 0x0002;
-    const uint VK_F1 = 0x70;
-    const int WM_HOTKEY = 0x0312;
 
     protected override CreateParams CreateParams
     {
         get
         {
-            // Görev çubuğunda adın net gözükmesi ve tıklayınca küçülüp büyümesi için WS_MINIMIZEBOX ve WS_SYSMENU
             const int WS_MINIMIZEBOX = 0x00020000;
             const int WS_SYSMENU = 0x00080000;
             const int CS_DROPSHADOW = 0x00020000;
-
             CreateParams cp = base.CreateParams;
             cp.Style |= WS_MINIMIZEBOX | WS_SYSMENU;
             cp.ClassStyle |= CS_DROPSHADOW;
@@ -66,206 +47,228 @@ public class MainForm : Form
 
     #endregion
 
-    // Renk Paleti: Derin Mat Karbon Siyahı & Kapalı Mat Amber Altın (#D4A017)
-    static readonly Color BgDark = Color.FromArgb(14, 14, 18);          // Derin Siyah Gövde
-    static readonly Color CardBg = Color.FromArgb(20, 20, 26);          // Ferah Kart Arka Planı
-    static readonly Color CardBorder = Color.FromArgb(34, 34, 44);      // İnce Ayrım Çizgisi
-    static readonly Color DarkGold = Color.FromArgb(212, 160, 23);      // Kapalı / Mat Amber Sarı (#D4A017)
-    static readonly Color DarkGoldHover = Color.FromArgb(228, 176, 36); // Hover Rengi
-    static readonly Color TextWhite = Color.FromArgb(240, 240, 245);    // Temiz Beyaz
-    static readonly Color TextMuted = Color.FromArgb(145, 145, 158);    // Soluk Gri
-    static readonly Color TextDim = Color.FromArgb(92, 92, 104);        // Koyu Gri
+    // Palet: Derin karbon siyahi & mat amber altin (#D4A017)
+    static readonly Color BgDark = Color.FromArgb(14, 14, 18);
+    static readonly Color CardBg = Color.FromArgb(20, 20, 26);
+    static readonly Color CardBorder = Color.FromArgb(34, 34, 44);
+    static readonly Color DarkGold = Color.FromArgb(212, 160, 23);
+    static readonly Color DarkGoldHover = Color.FromArgb(228, 176, 36);
+    static readonly Color TextWhite = Color.FromArgb(240, 240, 245);
+    static readonly Color TextMuted = Color.FromArgb(145, 145, 158);
+    static readonly Color TextDim = Color.FromArgb(92, 92, 104);
+    static readonly Color Surface = Color.FromArgb(28, 28, 36);
 
-    readonly AppSettings _settings;
-    NotifyIcon _trayIcon;
-    Icon _currentTrayIcon;
-    ContextMenuStrip _trayMenu;
-    ToolStripMenuItem _menuHeaderItem;
-    System.Windows.Forms.Timer _refreshTimer;
-    System.Windows.Forms.Timer _autoCleanTimer;
-    DateTime _lastCleanTime = DateTime.MinValue;
+    const int HNone = 0, HClose = 1, HMin = 2, HSettings = 3, HAbout = 4, HClean = 5, HSmart = 6, HFull = 7;
 
-    MemoryCleaner.MemorySnapshot _currentSnap;
-    string _statusText = "Sistem izleniyor • Hazır";
-    bool _isCleaning = false;
+    readonly TrayApp _app;
+    readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
+    readonly System.Windows.Forms.Timer _anim = new() { Interval = 16 };
+    readonly Stopwatch _clock = Stopwatch.StartNew();
+    readonly Bitmap _logo;
+    Icon _icon;
 
-    // Normal Minimalist Pencere Kontrolleri (Sağ üstte)
-    Rectangle _rcClose;
-    Rectangle _rcMin;
-    Rectangle _rcSettings;
-    Rectangle _rcAbout;
-    bool _hoverClose, _hoverMin, _hoverSettings, _hoverAbout;
+    // Yerlesim
+    Rectangle _rcClose, _rcMin, _rcSettings, _rcAbout, _rcCleanBtn, _rcToggle, _rcSmart, _rcFull;
+    int _hover = HNone;
 
-    // Yatay Temizleme Butonu
-    Rectangle _rcCleanBtn;
-    bool _hoverClean = false;
+    // Onbellekli metinler (yalnizca veri degisince yeniden uretilir)
+    string _sPct = "", _sUsed = "", _sFree = "", _sPage = "", _sPagePct = "", _sCache = "", _sInfo = "";
+    ulong _kAvail; uint _kLoad, _kProc, _kPageLoad; string _kStatus; bool _kCleaning;
 
-    public MainForm()
+    // Animasyon durumu
+    readonly float[] _seg = new float[2];   // 0 = Akilli, 1 = Tam secili orani
+    long _lastAnimMs;
+    string _toastText; long _toastStart = -1; Rectangle _toastRect;
+    const int ToastIn = 150, ToastHold = 3000, ToastOut = 150;
+
+    public MainForm(TrayApp app)
     {
-        _settings = AppSettings.Load();
+        _app = app;
+        Gdi.Acquire();
 
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
-
-        // BÜYÜTÜLMÜŞ FERAH YATAY BOYUT: 640 genişlik, 265 yükseklik
         Size = new Size(640, 265);
         BackColor = BgDark;
-        TopMost = _settings.AlwaysOnTop;
-
-        // Görev çubuğunda uygulamanın adı ve başlığı açıkça gözüksün
+        TopMost = app.Settings.AlwaysOnTop;
         Text = "T-RamCash";
         ShowInTaskbar = true;
 
-        // Uygulama simgesini (hem görev yöneticisinde hem formda) ayarla
         try
         {
             string icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "app.ico");
-            if (System.IO.File.Exists(icoPath))
-            {
-                Icon = new Icon(icoPath);
-            }
-            else if (!string.IsNullOrEmpty(Environment.ProcessPath))
-            {
-                Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath);
-            }
-
-            if (Icon != null)
-            {
-                SendMessage(Handle, WM_SETICON, ICON_SMALL, Icon.Handle);
-                SendMessage(Handle, WM_SETICON, ICON_BIG, Icon.Handle);
-            }
+            if (System.IO.File.Exists(icoPath)) _icon = new Icon(icoPath, 32, 32);
+            if (_icon != null) Icon = _icon;
         }
         catch { }
 
-        // Kontrol kutularının konumlarını dinamik ayarla
         _rcClose = new Rectangle(Width - 36, 12, 24, 22);
         _rcMin = new Rectangle(Width - 66, 12, 24, 22);
         _rcSettings = new Rectangle(Width - 96, 12, 24, 22);
         _rcAbout = new Rectangle(Width - 126, 12, 24, 22);
 
-        // Temizle Butonu (Sağ kolonda geniş ve ferah)
-        _rcCleanBtn = new Rectangle(430, 128, 190, 52);
+        // Sag kart: 430..620 (ic bosluk 16). Segmentli anahtar + temizle butonu
+        _rcToggle = new Rectangle(446, 112, 158, 26);
+        _rcSmart = new Rectangle(446, 112, 79, 26);
+        _rcFull = new Rectangle(525, 112, 79, 26);
+        _rcCleanBtn = new Rectangle(446, 148, 158, 44);
 
-        ApplyRoundedRegion();
-        SetupTray();
+        _seg[0] = app.ManualMode == CleanMode.Smart ? 1f : 0f;
+        _seg[1] = 1f - _seg[0];
 
-        // Kısayol (Ctrl + F1)
-        RegisterHotKey(this.Handle, HOTKEY_ID, MOD_CONTROL, VK_F1);
+        using (var ptr = new RegionHandle(CreateRoundRectRgn(0, 0, Width, Height, 16, 16)))
+            Region = Region.FromHrgn(ptr.Handle);
 
-        _refreshTimer = new System.Windows.Forms.Timer { Interval = 1000 };
-        _refreshTimer.Tick += (s, e) => { RefreshData(); Invalidate(); };
-        _refreshTimer.Start();
+        _logo = new Bitmap(20, 20, PixelFormat.Format32bppPArgb);
+        using (var lg = Graphics.FromImage(_logo)) DrawCustomLogo(lg, 0, 0, 20);
 
-        _autoCleanTimer = new System.Windows.Forms.Timer { Interval = 4000 };
-        _autoCleanTimer.Tick += (s, e) => CheckAutoClean();
-        _autoCleanTimer.Start();
+        _refresh.Tick += (s, e) => RefreshData();
+        _anim.Tick += (s, e) => AnimTick();
+        _app.CleaningChanged += OnCleaningChanged;
+        _app.CleanCompleted += OnCleanCompleted;
 
+        RefreshData();
+        UpdateTimers();
+    }
+
+    sealed class RegionHandle : IDisposable
+    {
+        public IntPtr Handle { get; }
+        public RegionHandle(IntPtr h) { Handle = h; }
+        public void Dispose() => DeleteObject(Handle);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _app.CleaningChanged -= OnCleaningChanged;
+            _app.CleanCompleted -= OnCleanCompleted;
+            _refresh.Dispose();
+            _anim.Dispose();
+            _logo.Dispose();
+        }
+        base.Dispose(disposing);
+        if (disposing)
+        {
+            _icon?.Dispose();
+            Gdi.Release();
+        }
+    }
+
+    public void ApplySettings()
+    {
+        TopMost = _app.Settings.AlwaysOnTop;
         RefreshData();
     }
 
-    void ApplyRoundedRegion()
+    #region Zamanlayicilar
+
+    // Gizliyken / kucukken 1 sn'lik UI zamanlayicisi tamamen durur.
+    void UpdateTimers()
     {
-        IntPtr ptr = CreateRoundRectRgn(0, 0, Width, Height, 16, 16);
-        Region = Region.FromHrgn(ptr);
-        DeleteObject(ptr);
+        bool active = Visible && WindowState != FormWindowState.Minimized;
+        if (active && !_refresh.Enabled) { RefreshData(); _refresh.Start(); }
+        else if (!active && _refresh.Enabled) _refresh.Stop();
+        if (!active) _anim.Stop(); else if (NeedsAnim()) EnsureAnim();
     }
+
+    protected override void OnVisibleChanged(EventArgs e) { base.OnVisibleChanged(e); UpdateTimers(); }
+    protected override void OnSizeChanged(EventArgs e) { base.OnSizeChanged(e); UpdateTimers(); }
+
+    #endregion
+
+    #region Veri & metin onbellegi
 
     void RefreshData()
     {
-        _currentSnap = MemoryCleaner.GetSnapshot();
-        UpdateTrayIcon(_currentSnap.MemoryLoadPercent);
+        MemoryCleaner.ReadSnapshot(ref _app.Snap);
+        ref var s = ref _app.Snap;
+        bool cleaning = _app.IsCleaning;
+        string status = _app.StatusText;
 
-        if (_menuHeaderItem != null)
-        {
-            double usedGb = _currentSnap.UsedPhysicalBytes / (1024.0 * 1024.0 * 1024.0);
-            double totalGb = _currentSnap.TotalPhysicalBytes / (1024.0 * 1024.0 * 1024.0);
-            string digits = _currentSnap.MemoryLoadPercent > 9 ? _currentSnap.MemoryLoadPercent.ToString() : $"0{_currentSnap.MemoryLoadPercent}";
-            _menuHeaderItem.Text = $"T-RamCash: %{digits} RAM ({usedGb:F1} GB / {totalGb:F1} GB)";
-        }
+        if (s.AvailablePhysicalBytes >> 20 == _kAvail && s.MemoryLoadPercent == _kLoad && s.ProcessCount == _kProc
+            && s.PageFileLoadPercent == _kPageLoad && ReferenceEquals(status, _kStatus) && cleaning == _kCleaning)
+            return; // degisiklik yok: yeniden boyama yok
+
+        _kAvail = s.AvailablePhysicalBytes >> 20; _kLoad = s.MemoryLoadPercent; _kProc = s.ProcessCount;
+        _kPageLoad = s.PageFileLoadPercent; _kStatus = status; _kCleaning = cleaning;
+
+        const double GB = 1024.0 * 1024.0 * 1024.0;
+        _sPct = "%" + s.MemoryLoadPercent;
+        _sUsed = $"{s.UsedPhysicalBytes / GB:F1} GB  /  {s.TotalPhysicalBytes / GB:F1} GB";
+        _sFree = $"Kullanılabilir: {s.AvailablePhysicalBytes / GB:F1} GB";
+        _sPagePct = "%" + s.PageFileLoadPercent;
+        _sPage = $"{s.UsedPageFileBytes / GB:F1} GB  /  {s.TotalPageFileBytes / GB:F1} GB";
+        _sCache = $"Sistem Cache: {s.SystemCacheBytes / (1024.0 * 1024.0):F0} MB";
+        _sInfo = $"● {status}  ·  {s.ProcessCount} Aktif Süreç";
+        Invalidate();
     }
 
-    void SetupTray()
+    #endregion
+
+    #region Olaylar (TrayApp)
+
+    void OnCleaningChanged()
     {
-        _trayMenu = new ContextMenuStrip();
-        
-        // Küçük menünün en başında iki basamaklı RAM göstergesi
-        _menuHeaderItem = new ToolStripMenuItem("T-RamCash: %00 RAM")
-        {
-            Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-            ForeColor = Color.DarkGoldenrod
-        };
-        _trayMenu.Items.Add(_menuHeaderItem);
-        _trayMenu.Items.Add(new ToolStripSeparator());
-
-        _trayMenu.Items.Add("Pencereyi Göster / Gizle", null, (s, e) => ToggleVisibility());
-        _trayMenu.Items.Add("Belleği Hızlı Temizle", null, (s, e) => TriggerClean());
-        _trayMenu.Items.Add(new ToolStripSeparator());
-        _trayMenu.Items.Add("Görev Yöneticisi", null, (s, e) => OpenTaskManager());
-        _trayMenu.Items.Add("Ayarlar...", null, (s, e) => OpenSettings());
-        _trayMenu.Items.Add("Hakkında...", null, (s, e) => OpenAbout());
-        _trayMenu.Items.Add(new ToolStripSeparator());
-        _trayMenu.Items.Add("Çıkış", null, (s, e) => FullExit());
-
-        _trayIcon = new NotifyIcon
-        {
-            Text = "T-RamCash",
-            ContextMenuStrip = _trayMenu,
-            Visible = true
-        };
-        _trayIcon.DoubleClick += (s, e) => ToggleVisibility();
-
-        if (_settings.StartMinimized)
-        {
-            WindowState = FormWindowState.Minimized;
-            ShowInTaskbar = false;
-        }
+        _kStatus = null; // metni yenile
+        RefreshData();
+        Invalidate();
+        if (_app.IsCleaning) EnsureAnim();
     }
 
-    void UpdateTrayIcon(uint percent)
+    void OnCleanCompleted(CleanResult r)
     {
-        try
-        {
-            // 32x32 yüksek DPI tuval üzerine çizim yapıyoruz (kesilme olmaksızın 2 basamak net sığar)
-            using var bmp = new Bitmap(32, 32);
-            using var g = Graphics.FromImage(bmp);
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-
-            // Mat siyah arka plan
-            using (var b = new SolidBrush(Color.FromArgb(14, 14, 18)))
-                g.FillRectangle(b, 0, 0, 32, 32);
-
-            // İnce altın sarı çerçeve
-            using (var p = new Pen(DarkGold, 1.5f))
-                g.DrawRectangle(p, 1, 1, 29, 29);
-
-            // İKİ BASAMAKLI SAYI GARANTİSİ (9'dan büyükse tam 2 basamak, örn: 44, 78)
-            string text = percent > 9 ? percent.ToString() : percent.ToString();
-
-            // 32x32 piksel içinde iki basamaklı sayı için kusursuz ölçek (15.5f Bold)
-            using var f = new Font("Segoe UI", 15.5f, FontStyle.Bold);
-            using var sf = new StringFormat
-            {
-                Alignment = StringAlignment.Center,
-                LineAlignment = StringAlignment.Center
-            };
-            g.DrawString(text, f, Brushes.White, new RectangleF(0, 0, 32, 32), sf);
-
-            IntPtr hIcon = bmp.GetHicon();
-            using var ico = Icon.FromHandle(hIcon);
-            var newIcon = (Icon)ico.Clone();
-            DestroyIcon(hIcon);
-
-            var oldIcon = _currentTrayIcon;
-            _trayIcon.Icon = newIcon;
-            _currentTrayIcon = newIcon;
-            oldIcon?.Dispose();
-
-            _trayIcon.Text = $"T-RamCash - %{text} RAM";
-        }
-        catch { }
+        double mb = r.FreedMb;
+        string freed = mb < 1 ? "Boşaltılacak bellek bulunamadı"
+            : mb >= 1024 ? $"+{mb / 1024.0:F1} GB boşaltıldı" : $"+{mb:F0} MB boşaltıldı";
+        _toastText = $"{freed} · {(r.Mode == CleanMode.Full ? "Tam" : "Akıllı")} · {r.DurationMs} ms";
+        var sz = TextRenderer.MeasureText(_toastText, Gdi.GetFont("Segoe UI", 9f, FontStyle.Regular));
+        int w = Math.Min(Width - 32, sz.Width + 32);
+        _toastRect = new Rectangle((Width - w) / 2, Height - 16 - 34, w, 34);
+        _toastStart = _clock.ElapsedMilliseconds;
+        EnsureAnim();
+        Invalidate();
     }
+
+    #endregion
+
+    #region Animasyon (yalnizca gerekirken calisir)
+
+    bool NeedsAnim()
+    {
+        if (_app.IsCleaning || _toastStart >= 0) return true;
+        float t0 = _app.ManualMode == CleanMode.Smart ? 1f : 0f;
+        return _seg[0] != t0 || _seg[1] != 1f - t0;
+    }
+
+    void EnsureAnim()
+    {
+        if (!_anim.Enabled && Visible) { _lastAnimMs = _clock.ElapsedMilliseconds; _anim.Start(); }
+    }
+
+    void AnimTick()
+    {
+        long now = _clock.ElapsedMilliseconds;
+        float step = (now - _lastAnimMs) / 120f; // 120 ms renk gecisi
+        _lastAnimMs = now;
+        float t0 = _app.ManualMode == CleanMode.Smart ? 1f : 0f;
+        _seg[0] = MoveToward(_seg[0], t0, step);
+        _seg[1] = MoveToward(_seg[1], 1f - t0, step);
+
+        if (_toastStart >= 0 && now - _toastStart > ToastIn + ToastHold + ToastOut) _toastStart = -1;
+
+        Invalidate();
+        if (!NeedsAnim()) _anim.Stop();
+    }
+
+    static float MoveToward(float v, float target, float step)
+        => v < target ? Math.Min(target, v + step) : Math.Max(target, v - step);
+
+    #endregion
+
+    #region Boyama
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -274,70 +277,41 @@ public class MainForm : Form
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-        // Dış çerçeve çizgisi
-        using (var penBorder = new Pen(CardBorder, 1))
-            g.DrawRectangle(penBorder, 0, 0, Width - 1, Height - 1);
+        g.DrawRectangle(Gdi.GetPen(CardBorder), 0, 0, Width - 1, Height - 1);
 
-        // 1. Üst Başlık & Normal Butonlar (Genişletilmiş Başlık Çubuğu)
         DrawHorizontalHeader(g);
-
-        // 2. Kolon 1 (Sol): Fiziksel Bellek (Genişletilmiş ve Ferah)
-        DrawColumnPhysical(g, 20, 56, 195, 185);
-
-        // 3. Kolon 2 (Orta): Sanal Bellek & Cache
-        DrawColumnVirtual(g, 225, 56, 195, 185);
-
-        // 4. Kolon 3 (Sağ): Aksiyon, Buton & Çekirdek Durumu
+        DrawColumn(g, 20, 56, 195, 185, "FİZİKSEL BELLEK", _sPct, _sUsed, _app.Snap.MemoryLoadPercent, _sFree);
+        DrawColumn(g, 225, 56, 195, 185, "SANAL & ÖNBELLEK", _sPagePct, _sPage, _app.Snap.PageFileLoadPercent, _sCache);
         DrawColumnAction(g, 430, 56, 190, 185);
+        if (_toastStart >= 0) DrawToast(g);
     }
 
     void DrawHorizontalHeader(Graphics g)
     {
-        // Özel Tasarım Logo (Yüksek Çözünürlüklü Altın Çip Monogramı)
-        DrawCustomLogo(g, 20, 12, 20);
+        g.DrawImageUnscaled(_logo, 20, 12);
+        g.DrawString("T-RAMCASH", Gdi.GetFont("Segoe UI", 10.5F, FontStyle.Bold), Gdi.GetBrush(DarkGold), 48, 12);
+        g.DrawString(_sInfo, Gdi.GetFont("Segoe UI", 8.5F), Gdi.GetBrush(TextDim), 175, 14);
 
-        // Görev Çubuğunda ve Başlıkta İsim: T-RAMCASH
-        using (var fTitle = new Font("Segoe UI", 10.5F, FontStyle.Bold))
-        using (var bGold = new SolidBrush(DarkGold))
-            g.DrawString("T-RAMCASH", fTitle, bGold, 48, 12);
+        DrawNormalBtn(g, _rcAbout, "ℹ", _hover == HAbout);
+        DrawNormalBtn(g, _rcSettings, "⚙", _hover == HSettings);
+        DrawNormalBtn(g, _rcMin, "—", _hover == HMin);
+        DrawNormalBtn(g, _rcClose, "✕", _hover == HClose);
 
-        // Ortada Durum Rozeti
-        using (var fStatus = new Font("Segoe UI", 8.5F))
-        using (var bDim = new SolidBrush(TextDim))
-        {
-            string info = $"● {_statusText}  ·  {_currentSnap.ProcessCount} Aktif Süreç";
-            g.DrawString(info, fStatus, bDim, 175, 14);
-        }
-
-        // Normal Minimalist Butonlar [ℹ] [⚙] [—] [✕]
-        DrawNormalBtn(g, _rcAbout, "ℹ", _hoverAbout);
-        DrawNormalBtn(g, _rcSettings, "⚙", _hoverSettings);
-        DrawNormalBtn(g, _rcMin, "—", _hoverMin);
-        DrawNormalBtn(g, _rcClose, "✕", _hoverClose);
-
-        // İnce alt ayırıcı çizgi
-        using var penLine = new Pen(CardBorder, 1);
-        g.DrawLine(penLine, 20, 44, Width - 20, 44);
+        g.DrawLine(Gdi.GetPen(CardBorder), 20, 44, Width - 20, 44);
     }
 
     void DrawCustomLogo(Graphics g, int x, int y, int s)
     {
-        var prevSmoothing = g.SmoothingMode;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-
-        // Dış yuvarlatılmış gövde (Squircle)
         var chipRect = new RectangleF(x, y, s, s);
         float radius = s * 0.22f;
         using var path = CreateRoundedRectanglePath(chipRect, radius);
 
-        // Çip gövdesi (Mat Obsidian Titanyum)
         using (var brBody = new LinearGradientBrush(chipRect, Color.FromArgb(28, 28, 36), Color.FromArgb(12, 12, 16), 90f))
             g.FillPath(brBody, path);
-
         using (var penRim = new Pen(Color.FromArgb(60, 60, 80), 1f))
             g.DrawPath(penRim, path);
 
-        // İç altın hat
         if (s >= 18)
         {
             var inRect = new RectangleF(x + 1.5f, y + 1.5f, s - 3f, s - 3f);
@@ -346,265 +320,182 @@ public class MainForm : Form
             g.DrawPath(penInGold, inPath);
         }
 
-        // T Harfi (Geometrik Keskin Altın Monogram)
-        float tW = s * 0.60f;
-        float tH = s * 0.54f;
-        float tX = x + (s - tW) / 2f;
-        float tY = y + (s - tH) / 2f;
-
-        float barH = Math.Max(2f, s * 0.16f);
-        float stemW = Math.Max(2f, s * 0.18f);
+        float tW = s * 0.60f, tH = s * 0.54f;
+        float tX = x + (s - tW) / 2f, tY = y + (s - tH) / 2f;
+        float barH = Math.Max(2f, s * 0.16f), stemW = Math.Max(2f, s * 0.18f);
         float chamfer = Math.Max(1f, s * 0.04f);
-        float stemLeft = tX + (tW - stemW) / 2f;
-        float stemRight = tX + (tW + stemW) / 2f;
+        float stemLeft = tX + (tW - stemW) / 2f, stemRight = tX + (tW + stemW) / 2f;
         float pointH = Math.Max(1.5f, s * 0.05f);
 
         var pts = new PointF[]
         {
-            new PointF(tX + chamfer, tY),
-            new PointF(tX + tW - chamfer, tY),
-            new PointF(tX + tW, tY + chamfer),
-            new PointF(tX + tW, tY + barH),
-            new PointF(stemRight, tY + barH),
-            new PointF(stemRight, tY + tH - pointH),
-            new PointF(x + (s * 0.5f), tY + tH),
-            new PointF(stemLeft, tY + tH - pointH),
-            new PointF(stemLeft, tY + barH),
-            new PointF(tX, tY + barH),
-            new PointF(tX, tY + chamfer)
+            new(tX + chamfer, tY), new(tX + tW - chamfer, tY), new(tX + tW, tY + chamfer), new(tX + tW, tY + barH),
+            new(stemRight, tY + barH), new(stemRight, tY + tH - pointH), new(x + (s * 0.5f), tY + tH),
+            new(stemLeft, tY + tH - pointH), new(stemLeft, tY + barH), new(tX, tY + barH), new(tX, tY + chamfer)
         };
 
-        using (var tPath = new GraphicsPath())
+        using var tPath = new GraphicsPath();
+        tPath.AddPolygon(pts);
+        using (var brGold = new LinearGradientBrush(new RectangleF(tX, tY, tW, tH),
+                   Color.FromArgb(245, 196, 52), Color.FromArgb(160, 110, 15), 65f))
+            g.FillPath(brGold, tPath);
+        if (s >= 18)
         {
-            tPath.AddPolygon(pts);
-
-            using (var brGold = new LinearGradientBrush(
-                new RectangleF(tX, tY, tW, tH),
-                Color.FromArgb(245, 196, 52),
-                Color.FromArgb(160, 110, 15),
-                65f))
-            {
-                g.FillPath(brGold, tPath);
-            }
-
-            if (s >= 18)
-            {
-                using var penTBorder = new Pen(Color.FromArgb(200, 255, 245, 180), 0.75f);
-                g.DrawPath(penTBorder, tPath);
-            }
+            using var penTBorder = new Pen(Color.FromArgb(200, 255, 245, 180), 0.75f);
+            g.DrawPath(penTBorder, tPath);
         }
-
-        g.SmoothingMode = prevSmoothing;
     }
 
     static GraphicsPath CreateRoundedRectanglePath(RectangleF rect, float radius)
     {
         var path = new GraphicsPath();
-        float diameter = radius * 2f;
-        var arc = new RectangleF(rect.X, rect.Y, diameter, diameter);
-
+        float d = radius * 2f;
+        var arc = new RectangleF(rect.X, rect.Y, d, d);
         path.AddArc(arc, 180, 90);
-        arc.X = rect.Right - diameter;
-        path.AddArc(arc, 270, 90);
-        arc.Y = rect.Bottom - diameter;
-        path.AddArc(arc, 0, 90);
-        arc.X = rect.Left;
-        path.AddArc(arc, 90, 90);
-
+        arc.X = rect.Right - d; path.AddArc(arc, 270, 90);
+        arc.Y = rect.Bottom - d; path.AddArc(arc, 0, 90);
+        arc.X = rect.Left; path.AddArc(arc, 90, 90);
         path.CloseFigure();
         return path;
     }
 
     void DrawNormalBtn(Graphics g, Rectangle rc, string text, bool hover)
     {
-        if (hover)
-        {
-            using var bHover = new SolidBrush(Color.FromArgb(28, 28, 36));
-            g.FillRectangle(bHover, rc);
-        }
-
-        using var font = new Font("Segoe UI", 9F, FontStyle.Regular);
-        using var brush = new SolidBrush(hover ? DarkGold : TextMuted);
-        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(text, font, brush, rc, sf);
+        if (hover) g.FillRectangle(Gdi.GetBrush(Surface), rc);
+        g.DrawString(text, Gdi.GetFont("Segoe UI", 9F), Gdi.GetBrush(hover ? DarkGold : TextMuted), rc, Gdi.Center);
     }
 
-    void DrawColumnPhysical(Graphics g, int x, int y, int w, int h)
+    void DrawColumn(Graphics g, int x, int y, int w, int h, string title, string pct, string sub, uint load, string foot)
     {
-        var rc = new Rectangle(x, y, w, h);
-        FillCard(g, rc);
+        FillCard(g, new Rectangle(x, y, w, h));
+        g.DrawString(title, Gdi.GetFont("Segoe UI", 8F, FontStyle.Bold), Gdi.GetBrush(TextMuted), x + 16, y + 16);
+        g.DrawString(pct, Gdi.GetFont("Segoe UI", 24F, FontStyle.Bold), Gdi.GetBrush(TextWhite), x + 14, y + 36);
+        g.DrawString(sub, Gdi.GetFont("Segoe UI", 8.5F), Gdi.GetBrush(TextMuted), x + 16, y + 88);
 
-        double totalGb = _currentSnap.TotalPhysicalBytes / (1024.0 * 1024.0 * 1024.0);
-        double usedGb = _currentSnap.UsedPhysicalBytes / (1024.0 * 1024.0 * 1024.0);
-        double freeGb = _currentSnap.AvailablePhysicalBytes / (1024.0 * 1024.0 * 1024.0);
+        int barW = w - 32, barY = y + 114;
+        g.FillRectangle(Gdi.GetBrush(Color.FromArgb(30, 30, 38)), x + 16, barY, barW, 4);
+        int fillW = (int)((barW * Math.Min(100u, load)) / 100.0);
+        if (fillW > 0) g.FillRectangle(Gdi.GetBrush(DarkGold), x + 16, barY, fillW, 4);
 
-        // Başlık
-        using (var fTitle = new Font("Segoe UI", 8F, FontStyle.Bold))
-        using (var bMuted = new SolidBrush(TextMuted))
-            g.DrawString("FİZİKSEL BELLEK", fTitle, bMuted, x + 16, y + 16);
-
-        // İki Basamaklı Ölçülü Minimal Yüzde
-        string pctStr = _currentSnap.MemoryLoadPercent > 9 ? $"%{_currentSnap.MemoryLoadPercent}" : $"%{_currentSnap.MemoryLoadPercent}";
-        using (var fPercent = new Font("Segoe UI", 24F, FontStyle.Bold))
-        using (var bWhite = new SolidBrush(TextWhite))
-            g.DrawString(pctStr, fPercent, bWhite, x + 14, y + 36);
-
-        // Aktif / Toplam
-        using (var fSub = new Font("Segoe UI", 8.5F))
-        using (var bDim = new SolidBrush(TextMuted))
-            g.DrawString($"{usedGb:F1} GB  /  {totalGb:F1} GB", fSub, bDim, x + 16, y + 88);
-
-        // İnce 4px Kapalı Altın Çizgi
-        int barW = w - 32;
-        int barY = y + 114;
-        using (var bTrack = new SolidBrush(Color.FromArgb(30, 30, 38)))
-            g.FillRectangle(bTrack, x + 16, barY, barW, 4);
-
-        int fillW = (int)((barW * Math.Min(100, _currentSnap.MemoryLoadPercent)) / 100.0);
-        if (fillW > 0)
-        {
-            using var bFill = new SolidBrush(DarkGold);
-            g.FillRectangle(bFill, x + 16, barY, fillW, 4);
-        }
-
-        // Boşta Bilgisi
-        using (var fFree = new Font("Segoe UI", 8.5F))
-        using (var bFree = new SolidBrush(TextDim))
-            g.DrawString($"Kullanılabilir: {freeGb:F1} GB", fFree, bFree, x + 16, y + 140);
-    }
-
-    void DrawColumnVirtual(Graphics g, int x, int y, int w, int h)
-    {
-        var rc = new Rectangle(x, y, w, h);
-        FillCard(g, rc);
-
-        double pageUsedGb = _currentSnap.UsedPageFileBytes / (1024.0 * 1024.0 * 1024.0);
-        double pageTotalGb = _currentSnap.TotalPageFileBytes / (1024.0 * 1024.0 * 1024.0);
-        double cacheMb = _currentSnap.SystemCacheBytes / (1024.0 * 1024.0);
-
-        // Başlık
-        using (var fTitle = new Font("Segoe UI", 8F, FontStyle.Bold))
-        using (var bMuted = new SolidBrush(TextMuted))
-            g.DrawString("SANAL & ÖNBELLEK", fTitle, bMuted, x + 16, y + 16);
-
-        // İki Basamaklı Ölçülü Yüzde
-        string pctStr = _currentSnap.PageFileLoadPercent > 9 ? $"%{_currentSnap.PageFileLoadPercent}" : $"%{_currentSnap.PageFileLoadPercent}";
-        using (var fPercent = new Font("Segoe UI", 24F, FontStyle.Bold))
-        using (var bWhite = new SolidBrush(TextWhite))
-            g.DrawString(pctStr, fPercent, bWhite, x + 14, y + 36);
-
-        // Sayfa Dosyası
-        using (var fSub = new Font("Segoe UI", 8.5F))
-        using (var bDim = new SolidBrush(TextMuted))
-            g.DrawString($"{pageUsedGb:F1} GB  /  {pageTotalGb:F1} GB", fSub, bDim, x + 16, y + 88);
-
-        // İnce 4px Kapalı Altın Çizgi
-        int barW = w - 32;
-        int barY = y + 114;
-        using (var bTrack = new SolidBrush(Color.FromArgb(30, 30, 38)))
-            g.FillRectangle(bTrack, x + 16, barY, barW, 4);
-
-        int fillW = (int)((barW * Math.Min(100, _currentSnap.PageFileLoadPercent)) / 100.0);
-        if (fillW > 0)
-        {
-            using var bFill = new SolidBrush(DarkGold);
-            g.FillRectangle(bFill, x + 16, barY, fillW, 4);
-        }
-
-        // Cache Bilgisi
-        using (var fCache = new Font("Segoe UI", 8.5F))
-        using (var bCache = new SolidBrush(TextDim))
-            g.DrawString($"Sistem Cache: {cacheMb:F0} MB", fCache, bCache, x + 16, y + 140);
+        g.DrawString(foot, Gdi.GetFont("Segoe UI", 8.5F), Gdi.GetBrush(TextDim), x + 16, y + 140);
     }
 
     void DrawColumnAction(Graphics g, int x, int y, int w, int h)
     {
-        var rc = new Rectangle(x, y, w, h);
-        FillCard(g, rc);
+        FillCard(g, new Rectangle(x, y, w, h));
+        bool admin = MemoryCleaner.IsAdministrator;
 
-        // Çekirdek Rozeti (Üstte Ferah)
-        using (var fBadge = new Font("Segoe UI", 8F, FontStyle.Bold))
-        using (var bBadge = new SolidBrush(MemoryCleaner.IsAdministrator ? DarkGold : TextMuted))
+        g.DrawString(admin ? "● YÖNETİCİ MODU" : "○ STANDART MOD", Gdi.GetFont("Segoe UI", 8F, FontStyle.Bold),
+            Gdi.GetBrush(admin ? DarkGold : TextMuted), x + 16, y + 16);
+        g.DrawString(admin ? "Tam önbellek yetkili" : "Yönetici ile tam yetki", Gdi.GetFont("Segoe UI", 7.5F),
+            Gdi.GetBrush(TextDim), x + 16, y + 34);
+
+        DrawToggle(g);
+        DrawCleanButton(g);
+
+        g.DrawString("Kısayol: Ctrl + F1", Gdi.GetFont("Segoe UI", 8F), Gdi.GetBrush(TextDim),
+            new RectangleF(x, y + 148, w, 18), Gdi.HCenter);
+    }
+
+    // Segmentli anahtar: [ Akıllı | Tam ]
+    void DrawToggle(Graphics g)
+    {
+        g.FillPath(Gdi.GetBrush(BgDark), Gdi.RoundedPath(_rcToggle, 8));
+        g.DrawPath(Gdi.GetPen(CardBorder), Gdi.RoundedPath(_rcToggle, 8));
+        DrawSegment(g, _rcSmart, "Akıllı", _seg[0], _hover == HSmart);
+        DrawSegment(g, _rcFull, "Tam", _seg[1], _hover == HFull);
+    }
+
+    void DrawSegment(Graphics g, Rectangle r, string text, float t, bool hover)
+    {
+        var inner = Rectangle.Inflate(r, -3, -3);
+        if (t > 0.01f)
+            g.FillPath(Gdi.GetBrush(Color.FromArgb((int)(255 * t), DarkGold)), Gdi.RoundedPath(inner, 6));
+        Color unselected = hover ? TextWhite : TextMuted;
+        g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), Gdi.GetBrush(Gdi.Lerp(unselected, BgDark, t)), r, Gdi.Center);
+    }
+
+    void DrawCleanButton(Graphics g)
+    {
+        var r = _rcCleanBtn;
+        var path = Gdi.RoundedPath(r, 8);
+        if (_app.IsCleaning)
         {
-            string role = MemoryCleaner.IsAdministrator ? "● YÖNETİCİ MODU" : "○ STANDART MOD";
-            g.DrawString(role, fBadge, bBadge, x + 16, y + 18);
-        }
+            g.FillPath(Gdi.GetBrush(Surface), path);
+            g.DrawPath(Gdi.GetPen(CardBorder), path);
+            g.DrawString("Temizleniyor…", Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(DarkGold), r, Gdi.Center);
 
-        using (var fNote = new Font("Segoe UI", 7.5F))
-        using (var bNote = new SolidBrush(TextDim))
+            // Animasyonlu altin alt cizgi: etiketin altinda soldan saga kayan segment
+            float phase = (_clock.ElapsedMilliseconds % 1100) / 1100f;
+            int span = r.Width - 24, segW = span / 3;
+            int sx = r.X + 12 + (int)((span + segW) * phase) - segW;
+            int x0 = Math.Max(sx, r.X + 12), x1 = Math.Min(sx + segW, r.X + 12 + span);
+            g.DrawLine(Gdi.GetPen(CardBorder, 2f), r.X + 12, r.Bottom - 10, r.X + 12 + span, r.Bottom - 10);
+            if (x1 > x0) g.DrawLine(Gdi.GetPen(DarkGold, 2f), x0, r.Bottom - 10, x1, r.Bottom - 10);
+        }
+        else
         {
-            string note = MemoryCleaner.IsAdministrator ? "Tam önbellek yetkili" : "Yönetici ile tam yetki";
-            g.DrawString(note, fNote, bNote, x + 16, y + 38);
+            g.FillPath(Gdi.GetBrush(_hover == HClean ? DarkGoldHover : DarkGold), path);
+            g.DrawString("BELLEĞİ TEMİZLE", Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(Color.Black), r, Gdi.Center);
         }
+    }
 
-        // Kapalı Altın Sarı Minimalist Buton
-        Color btnBg = _isCleaning ? Color.FromArgb(170, 130, 20)
-                    : _hoverClean ? DarkGoldHover
-                    : DarkGold;
+    // Pencere ici sonuc bildirimi: alt orta, 150 ms kayarak belirir, 3 sn sonra kaybolur.
+    void DrawToast(Graphics g)
+    {
+        long dt = _clock.ElapsedMilliseconds - _toastStart;
+        float a;
+        if (dt < ToastIn) a = dt / (float)ToastIn;
+        else if (dt < ToastIn + ToastHold) a = 1f;
+        else a = 1f - (dt - ToastIn - ToastHold) / (float)ToastOut;
+        a = Math.Clamp(a, 0f, 1f);
+        float ease = 1f - (1f - Math.Min(1f, dt / (float)ToastIn)) * (1f - Math.Min(1f, dt / (float)ToastIn));
+        int dy = (int)Math.Round(8 * (1f - ease));
+        int alpha = (int)(255 * a);
 
-        using (var bBtn = new SolidBrush(btnBg))
-            g.FillRectangle(bBtn, _rcCleanBtn);
-
-        string label = _isCleaning ? "TEMİZLENİYOR..." : "BELLEĞİ TEMİZLE";
-        using var fontBtn = new Font("Segoe UI", 9.5F, FontStyle.Bold);
-        using var brushBtn = new SolidBrush(Color.Black);
-        using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-
-        g.DrawString(label, fontBtn, brushBtn, _rcCleanBtn, sf);
-
-        // Kısayol İpucu
-        using var fKey = new Font("Segoe UI", 8F);
-        using var bKey = new SolidBrush(TextDim);
-        using var sfKey = new StringFormat { Alignment = StringAlignment.Center };
-        g.DrawString("Kısayol: Ctrl + F1", fKey, bKey, new RectangleF(x, y + 142, w, 18), sfKey);
+        var r = new Rectangle(_toastRect.X, _toastRect.Y + dy, _toastRect.Width, _toastRect.Height);
+        var path = Gdi.RoundedPath(r, 8);
+        g.FillPath(Gdi.GetBrush(Color.FromArgb(alpha, CardBg)), path);
+        g.DrawPath(Gdi.GetPen(Color.FromArgb(alpha, DarkGold)), path);
+        g.DrawString(_toastText, Gdi.GetFont("Segoe UI", 9F), Gdi.GetBrush(Color.FromArgb(alpha, TextWhite)), r, Gdi.Center);
     }
 
     void FillCard(Graphics g, Rectangle r)
     {
-        using (var b = new SolidBrush(CardBg))
-            g.FillRectangle(b, r);
-
-        using (var p = new Pen(CardBorder, 1))
-            g.DrawRectangle(p, r);
+        g.FillRectangle(Gdi.GetBrush(CardBg), r);
+        g.DrawRectangle(Gdi.GetPen(CardBorder), r);
     }
 
-    #region Mouse Etkileşimleri & Sürükleme
+    #endregion
+
+    #region Fare
+
+    int HitTest(Point p)
+    {
+        if (_rcClose.Contains(p)) return HClose;
+        if (_rcMin.Contains(p)) return HMin;
+        if (_rcSettings.Contains(p)) return HSettings;
+        if (_rcAbout.Contains(p)) return HAbout;
+        if (_rcSmart.Contains(p)) return HSmart;
+        if (_rcFull.Contains(p)) return HFull;
+        if (_rcCleanBtn.Contains(p)) return HClean;
+        return HNone;
+    }
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
-
-        if (_rcClose.Contains(e.Location))
+        switch (HitTest(e.Location))
         {
-            Hide();
-            return;
+            case HClose: BeginInvoke(new Action(_app.HideMain)); return; // bu formu Dispose eder
+            case HMin: WindowState = FormWindowState.Minimized; return;
+            case HSettings: _app.OpenSettings(this); return;
+            case HAbout: _app.OpenAbout(this); return;
+            case HSmart: SetMode(CleanMode.Smart); return;
+            case HFull: SetMode(CleanMode.Full); return;
+            case HClean: _app.RequestClean(_app.ManualMode, false); return;
         }
 
-        if (_rcMin.Contains(e.Location))
-        {
-            WindowState = FormWindowState.Minimized;
-            return;
-        }
-
-        if (_rcSettings.Contains(e.Location))
-        {
-            OpenSettings();
-            return;
-        }
-
-        if (_rcAbout.Contains(e.Location))
-        {
-            OpenAbout();
-            return;
-        }
-
-        if (_rcCleanBtn.Contains(e.Location))
-        {
-            TriggerClean();
-            return;
-        }
-
-        // Üst çubuktan pencereyi sürükleme
         if (e.Button == MouseButtons.Left && e.Y < 46)
         {
             ReleaseCapture();
@@ -612,24 +503,22 @@ public class MainForm : Form
         }
     }
 
+    void SetMode(CleanMode m)
+    {
+        if (_app.ManualMode == m) return;
+        _app.ManualMode = m;
+        EnsureAnim();
+        Invalidate();
+    }
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-
-        bool newClose = _rcClose.Contains(e.Location);
-        bool newMin = _rcMin.Contains(e.Location);
-        bool newSettings = _rcSettings.Contains(e.Location);
-        bool newAbout = _rcAbout.Contains(e.Location);
-        bool newClean = _rcCleanBtn.Contains(e.Location);
-
-        if (newClose != _hoverClose || newMin != _hoverMin || newSettings != _hoverSettings || newAbout != _hoverAbout || newClean != _hoverClean)
+        int h = HitTest(e.Location);
+        if (h != _hover)
         {
-            _hoverClose = newClose;
-            _hoverMin = newMin;
-            _hoverSettings = newSettings;
-            _hoverAbout = newAbout;
-            _hoverClean = newClean;
-            Cursor = (newClose || newMin || newSettings || newAbout || newClean) ? Cursors.Hand : Cursors.Default;
+            _hover = h;
+            Cursor = h != HNone ? Cursors.Hand : Cursors.Default;
             Invalidate();
         }
     }
@@ -637,133 +526,8 @@ public class MainForm : Form
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
-        _hoverClose = false;
-        _hoverMin = false;
-        _hoverSettings = false;
-        _hoverAbout = false;
-        _hoverClean = false;
-        Invalidate();
+        if (_hover != HNone) { _hover = HNone; Invalidate(); }
     }
 
     #endregion
-
-    void TriggerClean()
-    {
-        if (_isCleaning) return;
-        _isCleaning = true;
-        _statusText = "Temizleniyor...";
-        Invalidate();
-
-        System.Threading.Tasks.Task.Run(() =>
-        {
-            double freedMb = MemoryCleaner.Clean(_settings);
-            _lastCleanTime = DateTime.Now;
-
-            Invoke(new Action(() =>
-            {
-                _isCleaning = false;
-                _statusText = $"{freedMb:F1} MB serbest";
-                RefreshData();
-                Invalidate();
-
-                if (_settings.ShowCleanNotification)
-                {
-                    _trayIcon.ShowBalloonTip(3000, "T-RamCash", $"Bellek temizlendi!\n{freedMb:F1} MB RAM serbest bırakıldı.", ToolTipIcon.Info);
-                }
-            }));
-        });
-    }
-
-    void CheckAutoClean()
-    {
-        if (_settings.AutoCleanByRatio)
-        {
-            if (_currentSnap.MemoryLoadPercent >= _settings.AutoCleanRatioThreshold)
-            {
-                if ((DateTime.Now - _lastCleanTime).TotalSeconds > 60)
-                {
-                    TriggerClean();
-                    return;
-                }
-            }
-        }
-
-        if (_settings.AutoCleanByInterval)
-        {
-            if ((DateTime.Now - _lastCleanTime).TotalMinutes >= _settings.AutoCleanIntervalMinutes)
-            {
-                TriggerClean();
-            }
-        }
-    }
-
-    void OpenSettings()
-    {
-        using var frm = new SettingsForm(_settings);
-        if (frm.ShowDialog(this) == DialogResult.OK)
-        {
-            TopMost = _settings.AlwaysOnTop;
-            RefreshData();
-            Invalidate();
-        }
-    }
-
-    void OpenAbout()
-    {
-        using var frm = new AboutForm();
-        frm.ShowDialog(this);
-    }
-
-    void ToggleVisibility()
-    {
-        if (Visible && WindowState != FormWindowState.Minimized)
-        {
-            Hide();
-        }
-        else
-        {
-            Show();
-            WindowState = FormWindowState.Normal;
-            BringToFront();
-            Activate();
-        }
-    }
-
-    void OpenTaskManager()
-    {
-        try { Process.Start(new ProcessStartInfo("taskmgr.exe") { UseShellExecute = true }); } catch { }
-    }
-
-    void FullExit()
-    {
-        UnregisterHotKey(this.Handle, HOTKEY_ID);
-        _refreshTimer?.Stop();
-        _autoCleanTimer?.Stop();
-        if (_trayIcon != null)
-        {
-            _trayIcon.Visible = false;
-            _trayIcon.Dispose();
-        }
-        _currentTrayIcon?.Dispose();
-        Application.Exit();
-    }
-
-    protected override void OnFormClosing(FormClosingEventArgs e)
-    {
-        UnregisterHotKey(this.Handle, HOTKEY_ID);
-        _refreshTimer?.Stop();
-        _autoCleanTimer?.Stop();
-        _currentTrayIcon?.Dispose();
-        base.OnFormClosing(e);
-    }
-
-    protected override void WndProc(ref Message m)
-    {
-        if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HOTKEY_ID)
-        {
-            TriggerClean();
-            return;
-        }
-        base.WndProc(ref m);
-    }
 }

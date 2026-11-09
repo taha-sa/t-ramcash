@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -48,12 +51,15 @@ public class SettingsForm : Form
     CheckBox chkAutoInterval;
     NumericUpDown numAutoInterval;
 
+    ListBox lstExcluded;
+
     NumericUpDown numWarning;
     NumericUpDown numDanger;
 
     public SettingsForm(AppSettings settings)
     {
         _settings = settings;
+        Gdi.Acquire();
 
         Text = "Ayarlar";
         Size = new Size(420, 500);
@@ -86,7 +92,7 @@ public class SettingsForm : Form
         var lblTitle = new Label
         {
             Text = "AYARLAR & TERCİHLER",
-            Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+            Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold),
             ForeColor = DarkGold,
             Location = new Point(20, 15),
             AutoSize = true
@@ -96,7 +102,7 @@ public class SettingsForm : Form
         var btnClose = new Label
         {
             Text = "✕",
-            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+            Font = Gdi.GetFont("Segoe UI", 10F, FontStyle.Bold),
             ForeColor = TextMuted,
             Location = new Point(385, 12),
             Cursor = Cursors.Hand,
@@ -131,7 +137,7 @@ public class SettingsForm : Form
         var lblDivider = new Label
         {
             Text = "Otomasyon Kuralları:",
-            Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+            Font = Gdi.GetFont("Segoe UI", 8F, FontStyle.Bold),
             ForeColor = DarkGold,
             Location = new Point(20, 180),
             AutoSize = true
@@ -208,9 +214,58 @@ public class SettingsForm : Form
         tabLevels.Controls.Add(lblDanger);
         tabLevels.Controls.Add(numDanger);
 
+        // Otomatik temizleme modu (sabit: Akıllı)
+        tabClean.Controls.Add(new Label
+        {
+            Text = "Otomatik temizleme modu: Akıllı",
+            Font = Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold),
+            ForeColor = DarkGold,
+            Location = new Point(20, 296),
+            AutoSize = true
+        });
+        tabClean.Controls.Add(new Label
+        {
+            Text = "Otomatik temizlik her zaman Akıllı modda çalışır: ön plan uygulaması korunur, değiştirilmiş sayfalar ve dosya önbelleğine dokunulmaz. Tam mod yalnızca elle çalıştırılır.",
+            Font = Gdi.GetFont("Segoe UI", 8F),
+            ForeColor = TextMuted,
+            Location = new Point(20, 316),
+            Size = new Size(340, 48)
+        });
+
+        // Tab 4: Hariç tutulanlar
+        var tabExc = new TabPage("Hariç Tutulanlar") { BackColor = CardBg };
+        tabExc.Controls.Add(new Label
+        {
+            Text = "Bu süreçlerin belleği temizlenmez. Ön plandaki uygulama, T-RamCash ve diğer T-Suite uygulamaları her zaman hariçtir.",
+            Font = Gdi.GetFont("Segoe UI", 8F),
+            ForeColor = TextMuted,
+            Location = new Point(16, 16),
+            Size = new Size(340, 40)
+        });
+        lstExcluded = new ListBox
+        {
+            Location = new Point(16, 64),
+            Size = new Size(340, 200),
+            BackColor = Color.FromArgb(20, 20, 26),
+            ForeColor = TextWhite,
+            BorderStyle = BorderStyle.None,
+            IntegralHeight = false,
+            Font = Gdi.GetFont("Segoe UI", 9F)
+        };
+        foreach (var n in _settings.ExcludedProcesses ?? new List<string>()) lstExcluded.Items.Add(n);
+        tabExc.Controls.Add(lstExcluded);
+
+        var btnAdd = MakeGhostButton("Çalışan süreçlerden ekle…", new Rectangle(16, 272, 208, 32));
+        btnAdd.Click += (s, e) => AddFromRunning();
+        var btnRemove = MakeGhostButton("Kaldır", new Rectangle(232, 272, 124, 32));
+        btnRemove.Click += (s, e) => { if (lstExcluded.SelectedIndex >= 0) lstExcluded.Items.RemoveAt(lstExcluded.SelectedIndex); };
+        tabExc.Controls.Add(btnAdd);
+        tabExc.Controls.Add(btnRemove);
+
         tabControl.TabPages.Add(tabGeneral);
         tabControl.TabPages.Add(tabClean);
         tabControl.TabPages.Add(tabLevels);
+        tabControl.TabPages.Add(tabExc);
         Controls.Add(tabControl);
 
         // Kaydet Butonu
@@ -222,13 +277,45 @@ public class SettingsForm : Form
             Size = new Size(380, 38),
             BackColor = DarkGold,
             ForeColor = Color.Black,
-            Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+            Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold),
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand
         };
         btnSave.FlatAppearance.BorderSize = 0;
         btnSave.Click += (s, e) => SaveChanges();
         Controls.Add(btnSave);
+    }
+
+    static Button MakeGhostButton(string text, Rectangle r)
+    {
+        var b = new Button
+        {
+            Text = text,
+            Bounds = r,
+            BackColor = CardBg,
+            ForeColor = DarkGold,
+            Font = Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold),
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+        b.FlatAppearance.BorderColor = Color.FromArgb(34, 34, 44);
+        b.FlatAppearance.BorderSize = 1;
+        b.FlatAppearance.MouseOverBackColor = Color.FromArgb(28, 28, 36);
+        return b;
+    }
+
+    void AddFromRunning()
+    {
+        var existing = new HashSet<string>(lstExcluded.Items.Cast<string>(), StringComparer.OrdinalIgnoreCase);
+        using var dlg = new ProcessPickerForm(existing);
+        if (dlg.ShowDialog(this) == DialogResult.OK && !string.IsNullOrEmpty(dlg.Selected))
+            lstExcluded.Items.Add(dlg.Selected);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing) Gdi.Release();
     }
 
     CheckBox AddCheckBox(Control parent, string text, bool isChecked, int x, int y)
@@ -239,7 +326,7 @@ public class SettingsForm : Form
             Checked = isChecked,
             Location = new Point(x, y),
             AutoSize = true,
-            Font = new Font("Segoe UI", 8.5F),
+            Font = Gdi.GetFont("Segoe UI", 8.5F),
             ForeColor = TextWhite
         };
         parent.Controls.Add(chk);
@@ -264,9 +351,98 @@ public class SettingsForm : Form
         _settings.AutoCleanByInterval = chkAutoInterval.Checked;
         _settings.AutoCleanIntervalMinutes = (int)numAutoInterval.Value;
 
+        _settings.ExcludedProcesses = lstExcluded.Items.Cast<string>().Select(MemoryCleaner.NormalizeName)
+            .Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
         _settings.WarningLevel = (int)numWarning.Value;
         _settings.DangerLevel = (int)numDanger.Value;
 
         _settings.Save();
+    }
+}
+
+/// <summary>Calisan sureclerden birini secmek icin kucuk, ayni temada diyalog.</summary>
+public class ProcessPickerForm : Form
+{
+    [DllImport("user32.dll")] static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
+
+    static readonly Color BgDark = Color.FromArgb(16, 16, 20);
+    static readonly Color DarkGold = Color.FromArgb(212, 160, 23);
+    static readonly Color TextWhite = Color.FromArgb(245, 245, 247);
+
+    readonly ListBox _list;
+    public string Selected { get; private set; }
+
+    public ProcessPickerForm(HashSet<string> exclude)
+    {
+        Gdi.Acquire();
+        Text = "Süreç seç";
+        Size = new Size(340, 440);
+        FormBorderStyle = FormBorderStyle.None;
+        StartPosition = FormStartPosition.CenterParent;
+        ShowInTaskbar = false;
+        BackColor = BgDark;
+        ForeColor = TextWhite;
+
+        var header = new Label
+        {
+            Text = "ÇALIŞAN SÜREÇLER",
+            Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold),
+            ForeColor = DarkGold,
+            Dock = DockStyle.Top,
+            Height = 40,
+            Padding = new Padding(16, 14, 0, 0)
+        };
+        header.MouseDown += (s, e) => { ReleaseCapture(); SendMessage(Handle, 0xA1, 0x2, 0); };
+        Controls.Add(header);
+
+        _list = new ListBox
+        {
+            Location = new Point(16, 48),
+            Size = new Size(308, 304),
+            BackColor = Color.FromArgb(24, 24, 30),
+            ForeColor = TextWhite,
+            BorderStyle = BorderStyle.None,
+            IntegralHeight = false,
+            Font = Gdi.GetFont("Segoe UI", 9F)
+        };
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in Process.GetProcesses())
+        {
+            try { if (p.Id > 4) names.Add(p.ProcessName); } catch { } finally { p.Dispose(); }
+        }
+        foreach (var n in names) if (!exclude.Contains(n)) _list.Items.Add(n);
+        _list.DoubleClick += (s, e) => Accept();
+        Controls.Add(_list);
+
+        var ok = new Button
+        {
+            Text = "EKLE", Bounds = new Rectangle(16, 368, 196, 40), BackColor = DarkGold, ForeColor = Color.Black,
+            Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand
+        };
+        ok.FlatAppearance.BorderSize = 0;
+        ok.Click += (s, e) => Accept();
+        var cancel = new Button
+        {
+            Text = "Vazgeç", Bounds = new Rectangle(220, 368, 104, 40), BackColor = Color.FromArgb(24, 24, 30), ForeColor = DarkGold,
+            Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+            DialogResult = DialogResult.Cancel
+        };
+        cancel.FlatAppearance.BorderColor = Color.FromArgb(34, 34, 44);
+        Controls.Add(ok);
+        Controls.Add(cancel);
+        CancelButton = cancel;
+    }
+
+    void Accept()
+    {
+        if (_list.SelectedItem is string s) { Selected = s; DialogResult = DialogResult.OK; }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing) Gdi.Release();
     }
 }

@@ -55,7 +55,15 @@ public class AboutForm : Form
         BackColor = BgDark;
         KeyPreview = true;
 
+        Gdi.Acquire();
         ApplyRoundedRegion();
+    }
+
+    Font _sigFont;
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing) { _sigFont?.Dispose(); Gdi.Release(); }
     }
 
     void ApplyRoundedRegion()
@@ -82,7 +90,7 @@ public class AboutForm : Form
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
         // Dış kenar çizgisi
-        using (var penBorder = new Pen(CardBorder, 1))
+        var penBorder = Gdi.GetPen(CardBorder, 1);
             g.DrawRectangle(penBorder, 0, 0, Width - 1, Height - 1);
 
         // 1. Üst Başlık Çubuğu
@@ -107,29 +115,29 @@ public class AboutForm : Form
         DrawCustomLogo(g, 20, 12, 18);
 
         // Başlık
-        using (var fTitle = new Font("Segoe UI", 10F, FontStyle.Bold))
-        using (var bGold = new SolidBrush(DarkGold))
+        var fTitle = Gdi.GetFont("Segoe UI", 10F, FontStyle.Bold);
+        var bGold = Gdi.GetBrush(DarkGold);
             g.DrawString("T-RAMCASH", fTitle, bGold, 46, 13);
 
-        using (var fSub = new Font("Segoe UI", 8.5F))
-        using (var bMuted = new SolidBrush(TextDim))
+        var fSub = Gdi.GetFont("Segoe UI", 8.5F);
+        var bMuted = Gdi.GetBrush(TextDim);
             g.DrawString("•  Hakkında", fSub, bMuted, 134, 14);
 
         // Kapat Butonu (✕)
         if (_hoverClose)
         {
-            using var bHover = new SolidBrush(Color.FromArgb(28, 28, 36));
+            var bHover = Gdi.GetBrush(Color.FromArgb(28, 28, 36));
             g.FillRectangle(bHover, _rcClose);
         }
-        using (var font = new Font("Segoe UI", 9F, FontStyle.Regular))
-        using (var brush = new SolidBrush(_hoverClose ? DarkGold : TextMuted))
+        var font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Regular);
+        var brush = Gdi.GetBrush(_hoverClose ? DarkGold : TextMuted);
         using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
         {
             g.DrawString("✕", font, brush, _rcClose, sf);
         }
 
         // İnce ayırıcı çizgi
-        using var penLine = new Pen(CardBorder, 1);
+        var penLine = Gdi.GetPen(CardBorder, 1);
         g.DrawLine(penLine, 20, 42, Width - 20, 42);
     }
 
@@ -147,7 +155,7 @@ public class AboutForm : Form
         using (var brBody = new LinearGradientBrush(chipRect, Color.FromArgb(28, 28, 36), Color.FromArgb(12, 12, 16), 90f))
             g.FillPath(brBody, path);
 
-        using (var penRim = new Pen(Color.FromArgb(60, 60, 80), 1f))
+        var penRim = Gdi.GetPen(Color.FromArgb(60, 60, 80), 1f);
             g.DrawPath(penRim, path);
 
         // İç altın hat
@@ -155,7 +163,7 @@ public class AboutForm : Form
         {
             var inRect = new RectangleF(x + 1.5f, y + 1.5f, s - 3f, s - 3f);
             using var inPath = CreateRoundedRectanglePath(inRect, radius * 0.7f);
-            using var penInGold = new Pen(Color.FromArgb(90, 212, 160, 23), 1f);
+            var penInGold = Gdi.GetPen(Color.FromArgb(90, 212, 160, 23), 1f);
             g.DrawPath(penInGold, inPath);
         }
 
@@ -202,7 +210,7 @@ public class AboutForm : Form
 
             if (s >= 18)
             {
-                using var penTBorder = new Pen(Color.FromArgb(200, 255, 245, 180), 0.75f);
+                var penTBorder = Gdi.GetPen(Color.FromArgb(200, 255, 245, 180), 0.75f);
                 g.DrawPath(penTBorder, tPath);
             }
         }
@@ -231,26 +239,26 @@ public class AboutForm : Form
     void DrawAppInfoCard(Graphics g, int x, int y, int w, int h)
     {
         var rc = new Rectangle(x, y, w, h);
-        using (var b = new SolidBrush(CardBg))
+        var b = Gdi.GetBrush(CardBg);
             g.FillRectangle(b, rc);
-        using (var p = new Pen(CardBorder, 1))
+        var p = Gdi.GetPen(CardBorder, 1);
             g.DrawRectangle(p, rc);
 
         // Büyük Vurgulu Logo Rozeti
         DrawCustomLogo(g, x + 12, y + 13, 48);
 
         int textX = x + 70;
-        using (var fBold = new Font("Segoe UI", 9.5F, FontStyle.Bold))
-        using (var bWhite = new SolidBrush(TextWhite))
+        var fBold = Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold);
+        var bWhite = Gdi.GetBrush(TextWhite);
             g.DrawString("T-RamCash", fBold, bWhite, textX, y + 12);
 
-        using (var fDesc = new Font("Segoe UI", 8F))
-        using (var bMuted = new SolidBrush(TextMuted))
+        var fDesc = Gdi.GetFont("Segoe UI", 8F);
+        var bMuted = Gdi.GetBrush(TextMuted);
             g.DrawString("Akıllı Bellek & Önbellek Yöneticisi", fDesc, bMuted, textX, y + 32);
 
-        using (var fVer = new Font("Segoe UI", 7.5F))
-        using (var bDim = new SolidBrush(DarkGold))
-            g.DrawString("Sürüm 3.0 • Windows x64", fVer, bDim, textX, y + 50);
+        var fVer = Gdi.GetFont("Segoe UI", 7.5F);
+        var bDim = Gdi.GetBrush(DarkGold);
+            g.DrawString("Sürüm " + TrayApp.Version + " • Windows x64", fVer, bDim, textX, y + 50);
     }
 
     void DrawInstagramCard(Graphics g, Rectangle rc)
@@ -258,24 +266,24 @@ public class AboutForm : Form
         Color bg = _hoverInstagram ? CardBgHover : CardBg;
         Color border = _hoverInstagram ? DarkGold : CardBorder;
 
-        using (var b = new SolidBrush(bg))
+        var b = Gdi.GetBrush(bg);
             g.FillRectangle(b, rc);
-        using (var p = new Pen(border, 1))
+        var p = Gdi.GetPen(border, 1);
             g.DrawRectangle(p, rc);
 
         // Instagram İkon / Rozet Metni
-        using (var fBadge = new Font("Segoe UI", 8F, FontStyle.Bold))
-        using (var bGold = new SolidBrush(DarkGold))
+        var fBadge = Gdi.GetFont("Segoe UI", 8F, FontStyle.Bold);
+        var bGold = Gdi.GetBrush(DarkGold);
             g.DrawString("INSTAGRAM", fBadge, bGold, rc.X + 14, rc.Y + 11);
 
         // Kullanıcı Adı: tdesk.studio
-        using (var fInsta = new Font("Segoe UI", 11F, FontStyle.Bold))
-        using (var bWhite = new SolidBrush(_hoverInstagram ? DarkGoldHover : TextWhite))
+        var fInsta = Gdi.GetFont("Segoe UI", 11F, FontStyle.Bold);
+        var bWhite = Gdi.GetBrush(_hoverInstagram ? DarkGoldHover : TextWhite);
             g.DrawString("@tdesk.studio", fInsta, bWhite, rc.X + 13, rc.Y + 28);
 
         // Sağdaki yönlendirme oku (➔)
-        using (var fArrow = new Font("Segoe UI", 11F))
-        using (var bArrow = new SolidBrush(_hoverInstagram ? DarkGold : TextDim))
+        var fArrow = Gdi.GetFont("Segoe UI", 11F);
+        var bArrow = Gdi.GetBrush(_hoverInstagram ? DarkGold : TextDim);
         using (var sf = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center })
         {
             var arrowRc = new Rectangle(rc.Right - 36, rc.Y, 26, rc.Height);
@@ -286,19 +294,19 @@ public class AboutForm : Form
     void DrawSignatureSection(Graphics g, int x, int y, int w, int h)
     {
         var rc = new Rectangle(x, y, w, h);
-        using (var b = new SolidBrush(CardBg))
+        var b = Gdi.GetBrush(CardBg);
             g.FillRectangle(b, rc);
-        using (var p = new Pen(CardBorder, 1))
+        var p = Gdi.GetPen(CardBorder, 1);
             g.DrawRectangle(p, rc);
 
         // Üst Başlık (Küçük & Muted)
-        using (var fSub = new Font("Segoe UI", 7.5F))
-        using (var bDim = new SolidBrush(TextDim))
+        var fSub = Gdi.GetFont("Segoe UI", 7.5F);
+        var bDim = Gdi.GetBrush(TextDim);
             g.DrawString("TASARIM & GELİŞTİRME", fSub, bDim, x + 14, y + 10);
 
         // İmza Fontu: "Taha Şaprak " (Zarif, küçük imza)
-        using var fontSig = GetSignatureFont(10.5f);
-        using var brushSig = new SolidBrush(Color.FromArgb(220, 175, 45)); // Zarif altın tonu
+        var fontSig = _sigFont ??= GetSignatureFont(10.5f);
+        var brushSig = Gdi.GetBrush(Color.FromArgb(220, 175, 45)); 
         g.DrawString("Taha Şaprak ", fontSig, brushSig, x + 14, y + 28);
     }
 
@@ -307,13 +315,13 @@ public class AboutForm : Form
         Color bg = _hoverBtnClose ? Color.FromArgb(32, 32, 42) : Color.FromArgb(24, 24, 32);
         Color border = _hoverBtnClose ? DarkGold : CardBorder;
 
-        using (var b = new SolidBrush(bg))
+        var b = Gdi.GetBrush(bg);
             g.FillRectangle(b, rc);
-        using (var p = new Pen(border, 1))
+        var p = Gdi.GetPen(border, 1);
             g.DrawRectangle(p, rc);
 
-        using var font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-        using var brush = new SolidBrush(_hoverBtnClose ? DarkGold : TextMuted);
+        var font = Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold);
+        var brush = Gdi.GetBrush(_hoverBtnClose ? DarkGold : TextMuted);
         using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
         g.DrawString("KAPAT", font, brush, rc, sf);
     }
