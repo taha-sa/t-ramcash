@@ -23,7 +23,7 @@ public class AppSettings
 
     public bool AlwaysOnTop { get; set; } = false;
     public bool StartMinimized { get; set; } = false;
-    public bool StartWithWindows { get; set; } = false;
+    public bool StartWithWindows { get; set; } = true;
     public bool ShowCleanNotification { get; set; } = true;
     /// <summary>Otomatik temizlikte balon (varsayilan sessiz); elle temizlikte ShowCleanNotification gecerli.</summary>
     public bool AutoCleanNotification { get; set; } = false;
@@ -95,14 +95,24 @@ public class AppSettings
             File.WriteAllText(ConfigPath + ".tmp", json);
             File.Move(ConfigPath + ".tmp", ConfigPath, true);
 
-            // Startup registry check
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
+        }
+        catch
+        {
+        }
+        ApplyStartupRegistration();
+    }
+
+    public void ApplyStartupRegistration()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
             if (key != null)
             {
                 string exePath = Environment.ProcessPath ?? "";
                 if (StartWithWindows && !string.IsNullOrEmpty(exePath))
                 {
-                    key.SetValue("T-RamCash", $"\"{exePath}\"");
+                    key.SetValue("T-RamCash", $"\"{exePath}\" --tray", RegistryValueKind.String);
                     key.DeleteValue("MemReductClone", false); // Eski registry kaydını temizle
                 }
                 else

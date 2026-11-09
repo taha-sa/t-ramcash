@@ -137,7 +137,7 @@ public class SettingsForm : Form
         // Tab 1: Genel
         var tabGeneral = new TabPage("Genel") { BackColor = CardBg };
         chkAlwaysOnTop = AddCheckBox(tabGeneral, "Her zaman en üstte göster", _settings.AlwaysOnTop, 20, 25);
-        chkStartWithWindows = AddCheckBox(tabGeneral, "Windows başlangıcında otomatik başlat", _settings.StartWithWindows, 20, 60);
+        chkStartWithWindows = AddCheckBox(tabGeneral, "Windows ile başlat", _settings.StartWithWindows, 20, 60);
         chkStartMinimized = AddCheckBox(tabGeneral, "Sistem tepsisinde küçültülmüş başlat", _settings.StartMinimized, 20, 95);
         chkShowNotification = AddCheckBox(tabGeneral, "Temizlik sonuç bildirim balonunu göster", _settings.ShowCleanNotification, 20, 130);
         chkAutoNotification = AddCheckBox(tabGeneral, "Otomatik temizlikte de bildirim göster (varsayılan sessiz)", _settings.AutoCleanNotification, 20, 165);

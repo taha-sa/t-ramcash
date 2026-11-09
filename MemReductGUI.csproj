@@ -36,20 +36,8 @@
   <ItemGroup>
     <ProjectReference Include="$(TSuiteRoot)\src\TSuite.Link\TSuite.Link.csproj" />
     <ProjectReference Include="$(TSuiteRoot)\src\TSuite.Update\TSuite.Update.csproj" />
-    <ProjectReference Include="$(TSuiteRoot)\src\TSuite.Updater\TSuite.Updater.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <!-- TSuite.Updater yardimcisini (exe + dll + runtimeconfig) uygulamanin yanina kopyala -->
-  <Target Name="CopyUpdater" AfterTargets="Build">
-    <ItemGroup>
-      <UpdaterFiles Include="$(TSuiteRoot)\src\TSuite.Updater\bin\$(Configuration)\net10.0\TSuite.Updater.*" Exclude="**\*.pdb" />
-    </ItemGroup>
-    <Copy SourceFiles="@(UpdaterFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
-  </Target>
-  <Target Name="PublishUpdater" AfterTargets="ComputeFilesToPublish">
-    <ItemGroup>
-      <ResolvedFileToPublish Include="@(UpdaterFiles)" RelativePath="%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
-    </ItemGroup>
-  </Target>
+  <Import Project="$(TSuiteRoot)\build\TSuite.Updater.targets" />
 
 </Project>

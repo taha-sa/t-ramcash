@@ -42,6 +42,13 @@ dotnet publish $Project -c Release -r $Rid --self-contained false -p:PublishSing
   -p:Version=$Version -p:AssemblyVersion="$($Version -replace '-.*$','').0" -o $pub
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish basarisiz' }
 
+$requiredFiles = @($ExeName, 'TSuite.Updater.exe', 'TSuite.Updater.dll',
+  'TSuite.Updater.runtimeconfig.json', 'TSuite.Updater.deps.json')
+foreach ($file in $requiredFiles) {
+  if (-not (Test-Path -LiteralPath (Join-Path $pub $file) -PathType Leaf)) { throw "Publish dosyasi eksik: $file" }
+}
+if (-not $ArtifactAs.EndsWith('.zip')) { throw 'Updater yan dosyalari icin ZIP paketi gerekli' }
+
 $artifact = Join-Path $out $ArtifactAs
 if ($ArtifactAs.EndsWith('.zip')) {
   Compress-Archive -Path (Join-Path $pub '*') -DestinationPath $artifact -Force
@@ -51,7 +58,9 @@ if ($ArtifactAs.EndsWith('.zip')) {
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zipCheck = [IO.Compression.ZipFile]::OpenRead($artifact)
 try {
-  if (-not ($zipCheck.Entries | Where-Object { $_.Name -eq 'TSuite.Updater.exe' })) { throw "Updater zip'te yok" }
+  foreach ($file in $requiredFiles) {
+    if (-not ($zipCheck.Entries | Where-Object { $_.FullName -eq $file })) { throw "ZIP kokunde dosya eksik: $file" }
+  }
 } finally { $zipCheck.Dispose() }
 
 $sha = (Get-FileHash $artifact -Algorithm SHA256).Hash.ToLowerInvariant()

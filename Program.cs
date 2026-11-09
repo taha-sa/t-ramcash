@@ -53,18 +53,19 @@ static class Program
             return;
         }
 
+        bool startInTray = Array.Exists(args, a => string.Equals(a, "--tray", StringComparison.OrdinalIgnoreCase));
         using var mutex = new Mutex(true, MutexName, out bool createdNew);
         using var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
         if (!createdNew)
         {
             // Çalışan kopyaya "pencereyi göster" sinyali gönder (pencere gizliyken de çalışır).
-            try { showEvent.Set(); } catch { }
+            try { if (!startInTray) showEvent.Set(); } catch { }
             return;
         }
 
         try { SetCurrentProcessExplicitAppUserModelID("TRamCash.App.V3"); } catch { }
 
         ApplicationConfiguration.Initialize();
-        Application.Run(new TrayApp(showEvent));
+        Application.Run(new TrayApp(showEvent, startInTray));
     }
 }

@@ -15,7 +15,7 @@ sealed class RcLayout
     public int W, H;
     public Rectangle Close, Min, Settings, About;
     public Rectangle Card1, Card2, Card3;
-    public Rectangle Toggle, Smart, Full, CleanBtn, Admin;
+    public Rectangle Toggle, Smart, Full, ModeHelp, CleanBtn, Admin;
     public Rectangle InfoInv, CardsInv, InfoText;
 
     public int S(int v) => (int)Math.Round(v * Scale);
@@ -33,7 +33,8 @@ sealed class RcLayout
         l.Card1 = new Rectangle(S(20), S(56), S(195), S(185));
         l.Card2 = new Rectangle(S(225), S(56), S(195), S(185));
         l.Card3 = new Rectangle(S(430), S(56), S(190), S(185));
-        l.Toggle = new Rectangle(S(446), S(112), S(158), S(26));
+        l.Toggle = new Rectangle(S(446), S(112), S(132), S(26));
+        l.ModeHelp = new Rectangle(S(582), S(114), S(22), S(22));
         int half = l.Toggle.Width / 2;
         l.Smart = new Rectangle(l.Toggle.X, l.Toggle.Y, half, l.Toggle.Height);
         l.Full = new Rectangle(l.Toggle.X + half, l.Toggle.Y, l.Toggle.Width - half, l.Toggle.Height);
@@ -61,7 +62,8 @@ sealed class RcLayout
             foreach (var (n, r) in new[] { ("Close", L.Close), ("Min", L.Min), ("Settings", L.Settings), ("About", L.About),
                 ("Card1", L.Card1), ("Card2", L.Card2), ("Card3", L.Card3), ("InfoInv", L.InfoInv), ("CardsInv", L.CardsInv) })
                 Chk(n, r, form);
-            foreach (var (n, r) in new[] { ("Toggle", L.Toggle), ("Clean", L.CleanBtn), ("Admin", L.Admin) }) Chk(n, r, L.Card3);
+            foreach (var (n, r) in new[] { ("Toggle", L.Toggle), ("ModeHelp", L.ModeHelp), ("Clean", L.CleanBtn), ("Admin", L.Admin) }) Chk(n, r, L.Card3);
+            if (L.Toggle.IntersectsWith(L.ModeHelp)) { bad++; sb.AppendLine($"[{dpi}] HATA yardim dugmesi cakisiyor"); }
             Chk("Smart", L.Smart, L.Toggle); Chk("Full", L.Full, L.Toggle);
             if (L.Card1.Right > L.Card2.X || L.Card2.Right > L.Card3.X) { bad++; sb.AppendLine($"[{dpi}] HATA kartlar cakisiyor"); }
 

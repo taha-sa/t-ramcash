@@ -58,11 +58,12 @@ public class MainForm : Form
     static readonly Color TextDim = Color.FromArgb(92, 92, 104);
     static readonly Color Surface = Color.FromArgb(28, 28, 36);
 
-    const int HNone = 0, HClose = 1, HMin = 2, HSettings = 3, HAbout = 4, HClean = 5, HSmart = 6, HFull = 7, HAdmin = 8;
+    const int HNone = 0, HClose = 1, HMin = 2, HSettings = 3, HAbout = 4, HClean = 5, HSmart = 6, HFull = 7, HAdmin = 8, HModeHelp = 9;
     // Tab sirasi
-    static readonly int[] FocusOrder = { HAbout, HSettings, HMin, HClose, HSmart, HFull, HClean };
+    static readonly int[] FocusOrder = { HAbout, HSettings, HMin, HClose, HSmart, HFull, HModeHelp, HClean };
     int _focus = HNone;
-    ToolTip _tip;
+    ToolTip _tip, _modeTip;
+    const string ModeHelpText = "Akıllı: Arka plandaki uygulamaların gereksiz belleğini boşaltır, açık işinize dokunmaz (önerilen).\n\nTam: Önbellek dahil her şeyi boşaltır; yönetici izni gerekir, kısa süre yavaşlık olabilir.";
 
     readonly TrayApp _app;
     readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
@@ -169,6 +170,7 @@ public class MainForm : Form
         if (IsDisposed) return;
         _L = RcLayout.Compute(DeviceDpi);
         SetLayoutRects();
+        _modeTip?.Hide(this);
         Gdi.ResetScaled();
         if (Size != new Size(_L.W, _L.H)) Size = new Size(_L.W, _L.H);
         ApplyRegion();
@@ -195,6 +197,7 @@ public class MainForm : Form
             _anim.Dispose();
             _logo.Dispose();
             _tip?.Dispose();
+            _modeTip?.Dispose();
         }
         base.Dispose(disposing);
         if (disposing)
@@ -445,6 +448,16 @@ public class MainForm : Form
                 g.DrawLine(pen, cx, cy - 0.5f * u, cx, cy + 3f * u);
                 g.FillEllipse(Gdi.GetBrush(col), cx - 1f * u, cy - 3.8f * u, 2f * u, 2f * u);
                 break;
+            case HModeHelp:
+                g.DrawEllipse(pen, cx - 7f * u, cy - 7f * u, 14f * u, 14f * u);
+                using (var question = new GraphicsPath())
+                {
+                    question.AddBezier(cx - 2.5f * u, cy - 2.5f * u, cx - 2.5f * u, cy - 6f * u, cx + 5f * u, cy - 4f * u, cx + 2f * u, cy - 0.5f * u);
+                    question.AddLine(cx + 2f * u, cy - 0.5f * u, cx, cy + 1.5f * u);
+                    g.DrawPath(pen, question);
+                }
+                g.FillEllipse(Gdi.GetBrush(col), cx - 0.8f * u, cy + 3.5f * u, 1.6f * u, 1.6f * u);
+                break;
             case HSettings:
                 using (var gp = GearPath(cx, cy, 6.5f * u, 4.6f * u, 8)) g.DrawPath(pen, gp);
                 g.DrawEllipse(pen, cx - 2f * u, cy - 2f * u, 4f * u, 4f * u);
@@ -525,6 +538,7 @@ public class MainForm : Form
         g.DrawPath(Gdi.GetPen(CardBorder), Gdi.RoundedPath(_rcToggle, S(8)));
         DrawSegment(g, _rcSmart, "Akıllı", _seg[0], _hover == HSmart);
         DrawSegment(g, _rcFull, "Tam", _seg[1], _hover == HFull);
+        DrawNormalBtn(g, _L.ModeHelp, HModeHelp, _hover == HModeHelp);
     }
 
     void DrawSegment(Graphics g, Rectangle r, string text, float t, bool hover)
@@ -598,6 +612,7 @@ public class MainForm : Form
         if (_rcMin.Contains(p)) return HMin;
         if (_rcSettings.Contains(p)) return HSettings;
         if (_rcAbout.Contains(p)) return HAbout;
+        if (_L.ModeHelp.Contains(p)) return HModeHelp;
         if (_rcSmart.Contains(p)) return HSmart;
         if (_rcFull.Contains(p)) return HFull;
         if (_rcCleanBtn.Contains(p)) return HClean;
@@ -607,14 +622,14 @@ public class MainForm : Form
 
     Rectangle RectOf(int id) => id switch
     {
-        HClose => _rcClose, HMin => _rcMin, HSettings => _rcSettings, HAbout => _rcAbout,
+        HModeHelp => _L.ModeHelp, HClose => _rcClose, HMin => _rcMin, HSettings => _rcSettings, HAbout => _rcAbout,
         HSmart => _rcSmart, HFull => _rcFull, HClean => _rcCleanBtn, HAdmin => _rcAdmin, _ => Rectangle.Empty
     };
 
     static string NameOf(int id) => id switch
     {
         HClose => "Pencereyi gizle", HMin => "Tepsiye küçült", HSettings => "Ayarlar", HAbout => "Hakkında",
-        HSmart => "Akıllı mod", HFull => "Tam mod", HClean => "Belleği temizle", HAdmin => "Yönetici olarak yeniden başlat", _ => ""
+        HModeHelp => "Akıllı ve Tam mod açıklaması", HSmart => "Akıllı mod", HFull => "Tam mod", HClean => "Belleği temizle", HAdmin => "Yönetici olarak yeniden başlat", _ => ""
     };
 
     void ActivateItem(int id)
@@ -625,6 +640,7 @@ public class MainForm : Form
             case HMin: BeginInvoke(new Action(_app.HideMain)); return;   // kucultunce tepsiye gizle
             case HSettings: _app.OpenSettings(this); return;
             case HAbout: _app.OpenAbout(this); return;
+            case HModeHelp: ShowModeHelp(); return;
             case HSmart: SetMode(CleanMode.Smart); return;
             case HFull: SetMode(CleanMode.Full); return;
             case HClean: _app.RequestClean(_app.ManualMode, false); return;
@@ -687,8 +703,34 @@ public class MainForm : Form
         g.DrawPath(Gdi.GetPen(DarkGold, 1.5f), Gdi.RoundedPath(r, S(8)));
     }
 
+    void ShowModeHelp()
+    {
+        _tip?.Hide(this);
+        if (_modeTip == null)
+        {
+            _modeTip = new ToolTip { OwnerDraw = true, InitialDelay = 0, ReshowDelay = 0 };
+            _modeTip.Popup += (_, e) =>
+            {
+                var size = TextRenderer.MeasureText(ModeHelpText, Gdi.GetFont("Segoe UI", 9f),
+                    new Size(S(300), int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                e.ToolTipSize = new Size(size.Width + S(24), size.Height + S(24));
+            };
+            _modeTip.Draw += (_, e) =>
+            {
+                e.Graphics.FillRectangle(Gdi.GetBrush(Surface), e.Bounds);
+                e.Graphics.DrawRectangle(Gdi.GetPen(DarkGold), 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
+                TextRenderer.DrawText(e.Graphics, ModeHelpText, Gdi.GetFont("Segoe UI", 9f),
+                    Rectangle.Inflate(e.Bounds, -S(12), -S(12)), TextWhite,
+                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+            };
+        }
+        _modeTip.Show(ModeHelpText, this, _L.ModeHelp.Right - S(324), _L.ModeHelp.Bottom + S(4), 15000);
+    }
+
     void ShowTip(int id)
     {
+        if (id == HModeHelp) { ShowModeHelp(); return; }
+        _modeTip?.Hide(this);
         string t = NameOf(id);
         if (t.Length == 0) return;
         _tip ??= new ToolTip { InitialDelay = 0, ReshowDelay = 0 };

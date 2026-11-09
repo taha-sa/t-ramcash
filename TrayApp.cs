@@ -67,10 +67,11 @@ public sealed class TrayApp : ApplicationContext
     bool _exiting;
     TaskCompletionSource<CleanResult> _activeClean;   // calisan ram.clean yaniti; cikista iptal edilir
 
-    public TrayApp(EventWaitHandle showEvent)
+    public TrayApp(EventWaitHandle showEvent, bool startInTray = false)
     {
         _showEvent = showEvent;
         Settings = AppSettings.Load();
+        Settings.ApplyStartupRegistration();
         MemoryCleaner.ReadSnapshot(ref Snap);
 
         _menuHeader = new ToolStripMenuItem("T-RamCash") { ForeColor = Color.DarkGoldenrod };
@@ -113,7 +114,7 @@ public sealed class TrayApp : ApplicationContext
         StartLink();
         StartUpdateFlow();
 
-        if (Settings.StartMinimized) ScheduleTrim(); else ShowMain();
+        if (startInTray || Settings.StartMinimized) ScheduleTrim(); else ShowMain();
     }
 
     #region Arka plan kontrolu (5 sn)
