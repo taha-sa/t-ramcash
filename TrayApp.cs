@@ -217,7 +217,7 @@ public sealed class TrayApp : ApplicationContext
         {
             StatusText = $"{r.FreedMb:F1} MB serbest";
             _link?.Publish("ram.cleaned", LinkJson.Obj(("freedMb", r.FreedMb), ("mode", r.Mode == CleanMode.Full ? "full" : "smart")));
-            if (_main == null && Settings.ShowCleanNotification)
+            if ((_main == null || _main.IsDisposed || !_main.Visible || _main.WindowState == FormWindowState.Minimized) && Settings.ShowCleanNotification)
                 _tray.ShowBalloonTip(3000, "T-RamCash", $"Bellek temizlendi!\n{r.FreedMb:F1} MB RAM serbest bırakıldı.", ToolTipIcon.Info);
         }
         else StatusText = "Temizlik başarısız";
