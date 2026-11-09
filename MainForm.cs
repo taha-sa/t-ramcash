@@ -58,7 +58,11 @@ public class MainForm : Form
     static readonly Color TextDim = Color.FromArgb(92, 92, 104);
     static readonly Color Surface = Color.FromArgb(28, 28, 36);
 
-    const int HNone = 0, HClose = 1, HMin = 2, HSettings = 3, HAbout = 4, HClean = 5, HSmart = 6, HFull = 7;
+    const int HNone = 0, HClose = 1, HMin = 2, HSettings = 3, HAbout = 4, HClean = 5, HSmart = 6, HFull = 7, HAdmin = 8;
+    // Tab sirasi
+    static readonly int[] FocusOrder = { HAbout, HSettings, HMin, HClose, HSmart, HFull, HClean };
+    int _focus = HNone;
+    ToolTip _tip;
 
     readonly TrayApp _app;
     readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
@@ -68,7 +72,7 @@ public class MainForm : Form
     Icon _icon;
 
     // Yerlesim
-    Rectangle _rcClose, _rcMin, _rcSettings, _rcAbout, _rcCleanBtn, _rcToggle, _rcSmart, _rcFull;
+    Rectangle _rcClose, _rcMin, _rcSettings, _rcAbout, _rcCleanBtn, _rcToggle, _rcSmart, _rcFull, _rcAdmin;
     int _hover = HNone;
 
     // Onbellekli metinler (yalnizca veri degisince yeniden uretilir)
@@ -88,7 +92,7 @@ public class MainForm : Form
 
         try
         {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            SetStyle(ControlStyles.Selectable | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(640, 265);
@@ -115,6 +119,8 @@ public class MainForm : Form
             _rcSmart = new Rectangle(446, 112, 79, 26);
             _rcFull = new Rectangle(525, 112, 79, 26);
             _rcCleanBtn = new Rectangle(446, 148, 158, 44);
+            _rcAdmin = new Rectangle(446, 68, 158, 38);
+            AccessibleName = "T-RamCash"; AccessibleRole = AccessibleRole.Window;
 
             _seg[0] = app.ManualMode == CleanMode.Smart ? 1f : 0f;
             _seg[1] = 1f - _seg[0];
@@ -152,6 +158,7 @@ public class MainForm : Form
             _refresh.Dispose();
             _anim.Dispose();
             _logo.Dispose();
+            _tip?.Dispose();
         }
         base.Dispose(disposing);
         if (disposing)
@@ -179,7 +186,12 @@ public class MainForm : Form
     }
 
     protected override void OnVisibleChanged(EventArgs e) { base.OnVisibleChanged(e); UpdateTimers(); }
-    protected override void OnSizeChanged(EventArgs e) { base.OnSizeChanged(e); UpdateTimers(); }
+    protected override void OnSizeChanged(EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        UpdateTimers();
+        if (WindowState == FormWindowState.Minimized && IsHandleCreated) BeginInvoke(new Action(_app.HideMain)); // kucultunce tepsiye gizle
+    }
 
     #endregion
 
@@ -207,7 +219,8 @@ public class MainForm : Form
         _sPage = $"{s.UsedPageFileBytes / GB:F1} GB  /  {s.TotalPageFileBytes / GB:F1} GB";
         _sCache = $"Sistem Cache: {s.SystemCacheBytes / (1024.0 * 1024.0):F0} MB";
         _sInfo = $"● {status}  ·  {s.ProcessCount} Aktif Süreç";
-        Invalidate();
+        Invalidate(new Rectangle(170, 8, Width - 340, 30)); // bilgi satiri
+        Invalidate(new Rectangle(20, 56, 400, 185)); // bellek kartlari
     }
 
     #endregion
@@ -227,13 +240,17 @@ public class MainForm : Form
         double mb = r.FreedMb;
         string freed = mb < 1 ? "Boşaltılacak bellek bulunamadı"
             : mb >= 1024 ? $"+{mb / 1024.0:F1} GB boşaltıldı" : $"+{mb:F0} MB boşaltıldı";
-        _toastText = $"{freed} · {(r.Mode == CleanMode.Full ? "Tam" : "Akıllı")} · {r.DurationMs} ms";
+        _toastText = r.Note != null
+            ? $"{freed} · {r.Note}"
+            : $"{freed} · {(r.Mode == CleanMode.Full ? "Tam" : "Akıllı")} · {r.DurationMs} ms";
         var sz = TextRenderer.MeasureText(_toastText, Gdi.GetFont("Segoe UI", 9f, FontStyle.Regular));
         int w = Math.Min(Width - 32, sz.Width + 32);
+        var oldToast = _toastRect;
         _toastRect = new Rectangle((Width - w) / 2, Height - 16 - 34, w, 34);
         _toastStart = _clock.ElapsedMilliseconds;
         EnsureAnim();
-        Invalidate();
+        if (!oldToast.IsEmpty) Invalidate(Rectangle.Inflate(oldToast, 4, 14));
+        Invalidate(Rectangle.Inflate(_toastRect, 4, 14));
     }
 
     #endregion
@@ -261,9 +278,12 @@ public class MainForm : Form
         _seg[0] = MoveToward(_seg[0], t0, step);
         _seg[1] = MoveToward(_seg[1], 1f - t0, step);
 
-        if (_toastStart >= 0 && now - _toastStart > ToastIn + ToastHold + ToastOut) _toastStart = -1;
+        bool toastEnding = _toastStart >= 0 && now - _toastStart > ToastIn + ToastHold + ToastOut;
+        if (toastEnding) _toastStart = -1;
 
-        Invalidate();
+        Invalidate(Rectangle.Inflate(_rcToggle, 2, 2));
+        Invalidate(Rectangle.Inflate(_rcCleanBtn, 2, 2));
+        if (!_toastRect.IsEmpty) Invalidate(Rectangle.Inflate(_toastRect, 4, 14));
         if (!NeedsAnim()) _anim.Stop();
     }
 
@@ -288,6 +308,7 @@ public class MainForm : Form
         DrawColumn(g, 225, 56, 195, 185, "SANAL & ÖNBELLEK", _sPagePct, _sPage, _app.Snap.PageFileLoadPercent, _sCache);
         DrawColumnAction(g, 430, 56, 190, 185);
         if (_toastStart >= 0) DrawToast(g);
+        DrawFocus(g);
     }
 
     void DrawHorizontalHeader(Graphics g)
@@ -394,6 +415,8 @@ public class MainForm : Form
         g.DrawString(admin ? "Tam önbellek yetkili" : "Yönetici ile tam yetki", Gdi.GetFont("Segoe UI", 7.5F),
             Gdi.GetBrush(TextDim), x + 16, y + 34);
 
+        if (!admin)
+            g.DrawString("▸ Yönetici olarak yeniden başlat", Gdi.GetFont("Segoe UI", 7F, FontStyle.Underline), Gdi.GetBrush(_hover == HAdmin ? TextWhite : DarkGold), x + 16, y + 48);
         DrawToggle(g);
         DrawCleanButton(g);
 
@@ -483,29 +506,119 @@ public class MainForm : Form
         if (_rcSmart.Contains(p)) return HSmart;
         if (_rcFull.Contains(p)) return HFull;
         if (_rcCleanBtn.Contains(p)) return HClean;
+        if (!MemoryCleaner.IsAdministrator && _rcAdmin.Contains(p)) return HAdmin;
         return HNone;
+    }
+
+    Rectangle RectOf(int id) => id switch
+    {
+        HClose => _rcClose, HMin => _rcMin, HSettings => _rcSettings, HAbout => _rcAbout,
+        HSmart => _rcSmart, HFull => _rcFull, HClean => _rcCleanBtn, HAdmin => _rcAdmin, _ => Rectangle.Empty
+    };
+
+    static string NameOf(int id) => id switch
+    {
+        HClose => "Pencereyi gizle", HMin => "Tepsiye küçült", HSettings => "Ayarlar", HAbout => "Hakkında",
+        HSmart => "Akıllı mod", HFull => "Tam mod", HClean => "Belleği temizle", HAdmin => "Yönetici olarak yeniden başlat", _ => ""
+    };
+
+    void ActivateItem(int id)
+    {
+        switch (id)
+        {
+            case HClose: BeginInvoke(new Action(_app.HideMain)); return; // bu formu Dispose eder
+            case HMin: BeginInvoke(new Action(_app.HideMain)); return;   // kucultunce tepsiye gizle
+            case HSettings: _app.OpenSettings(this); return;
+            case HAbout: _app.OpenAbout(this); return;
+            case HSmart: SetMode(CleanMode.Smart); return;
+            case HFull: SetMode(CleanMode.Full); return;
+            case HClean: _app.RequestClean(_app.ManualMode, false); return;
+            case HAdmin: _app.RestartAsAdmin(); return;
+        }
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
         base.OnMouseDown(e);
         if (e.Button != MouseButtons.Left) return;
-        switch (HitTest(e.Location))
-        {
-            case HClose: BeginInvoke(new Action(_app.HideMain)); return; // bu formu Dispose eder
-            case HMin: WindowState = FormWindowState.Minimized; return;
-            case HSettings: _app.OpenSettings(this); return;
-            case HAbout: _app.OpenAbout(this); return;
-            case HSmart: SetMode(CleanMode.Smart); return;
-            case HFull: SetMode(CleanMode.Full); return;
-            case HClean: _app.RequestClean(_app.ManualMode, false); return;
-        }
+        int id = HitTest(e.Location);
+        if (id != HNone) { SetFocusItem(HNone); ActivateItem(id); return; }
 
-        if (e.Button == MouseButtons.Left && e.Y < 46)
+        if (e.Y < 46)
         {
             ReleaseCapture();
             SendMessage(Handle, WM_NCLBUTTONDOWN, HT_CAPTION, 0);
         }
+    }
+
+    // ---- Klavye ----
+    void SetFocusItem(int id)
+    {
+        if (_focus == id) return;
+        var old = RectOf(_focus);
+        _focus = id;
+        if (!old.IsEmpty) Invalidate(Rectangle.Inflate(old, 4, 4));
+        var nr = RectOf(id);
+        if (!nr.IsEmpty) { Invalidate(Rectangle.Inflate(nr, 4, 4)); ShowTip(id); }
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        switch (keyData)
+        {
+            case Keys.Tab:
+            case Keys.Tab | Keys.Shift:
+            {
+                int n = FocusOrder.Length, i = Array.IndexOf(FocusOrder, _focus);
+                i = keyData == Keys.Tab ? (i + 1) % n : (i <= 0 ? n - 1 : i - 1);
+                SetFocusItem(FocusOrder[i]);
+                return true;
+            }
+            case Keys.Enter:
+            case Keys.Space:
+                if (_focus != HNone) { ActivateItem(_focus); return true; }
+                break;
+            case Keys.Escape:
+                BeginInvoke(new Action(_app.HideMain));
+                return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    void DrawFocus(Graphics g)
+    {
+        if (_focus == HNone) return;
+        var r = Rectangle.Inflate(RectOf(_focus), 2, 2);
+        g.DrawPath(Gdi.GetPen(DarkGold, 1.5f), Gdi.RoundedPath(r, 8));
+    }
+
+    void ShowTip(int id)
+    {
+        string t = NameOf(id);
+        if (t.Length == 0) return;
+        _tip ??= new ToolTip { InitialDelay = 0, ReshowDelay = 0 };
+        var r = RectOf(id);
+        _tip.Show(t, this, r.X, r.Bottom + 4, 1500);
+    }
+
+    // ---- Erisilebilirlik ----
+    protected override AccessibleObject CreateAccessibilityInstance() => new FormAcc(this);
+
+    sealed class FormAcc(MainForm f) : Control.ControlAccessibleObject(f)
+    {
+        public override int GetChildCount() => FocusOrder.Length;
+        public override AccessibleObject GetChild(int index)
+            => index >= 0 && index < FocusOrder.Length ? new ItemAcc(f, this, FocusOrder[index]) : null;
+    }
+
+    sealed class ItemAcc(MainForm f, AccessibleObject parent, int id) : AccessibleObject
+    {
+        public override string Name { get => NameOf(id); set { } }
+        public override AccessibleRole Role => AccessibleRole.PushButton;
+        public override AccessibleObject Parent => parent;
+        public override Rectangle Bounds => f.RectangleToScreen(f.RectOf(id));
+        public override string DefaultAction => "Etkinleştir";
+        public override void DoDefaultAction() => f.ActivateItem(id);
     }
 
     void SetMode(CleanMode m)
@@ -522,16 +635,19 @@ public class MainForm : Form
         int h = HitTest(e.Location);
         if (h != _hover)
         {
+            var o = RectOf(_hover);
             _hover = h;
             Cursor = h != HNone ? Cursors.Hand : Cursors.Default;
-            Invalidate();
+            if (!o.IsEmpty) Invalidate(Rectangle.Inflate(o, 4, 4));
+            var n = RectOf(h);
+            if (!n.IsEmpty) { Invalidate(Rectangle.Inflate(n, 4, 4)); ShowTip(h); }
         }
     }
 
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
-        if (_hover != HNone) { _hover = HNone; Invalidate(); }
+        if (_hover != HNone) { var o = RectOf(_hover); _hover = HNone; Invalidate(Rectangle.Inflate(o, 4, 4)); }
     }
 
     #endregion
