@@ -331,28 +331,31 @@ public static class MemoryCleaner
 
     static HashSet<string> BuildExcludedNames(AppSettings settings, out HashSet<uint> excludedPids)
     {
-        if (_exCache != null && _exPids != null && Environment.TickCount64 - _exTick < 30000)
+        // Yavas kisimlar (manifestler, kullanici listesi) 30 sn onbellekte; on plan PID her temizlikte taze okunur.
+        if (_exCache == null || _exPids == null || Environment.TickCount64 - _exTick >= 30000)
         {
-            excludedPids = _exPids;
-            return _exCache;
-        }
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pids = new HashSet<uint> { (uint)Environment.ProcessId };
 
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        excludedPids = new HashSet<uint> { (uint)Environment.ProcessId };
+            if (settings.ExcludedProcesses != null)
+                foreach (var n in settings.ExcludedProcesses) names.Add(NormalizeName(n));
 
-        if (settings.ExcludedProcesses != null)
-            foreach (var n in settings.ExcludedProcesses) names.Add(NormalizeName(n));
-
-        try
-        {
-            foreach (var m in new AppRegistry().ReadAll())
+            try
             {
-                if (!string.IsNullOrEmpty(m.ExePath)) names.Add(Path.GetFileNameWithoutExtension(m.ExePath));
-                if (m.Pid > 0) excludedPids.Add((uint)m.Pid);
+                foreach (var m in new AppRegistry().ReadAll())
+                {
+                    if (!string.IsNullOrEmpty(m.ExePath)) names.Add(Path.GetFileNameWithoutExtension(m.ExePath));
+                    if (m.Pid > 0) pids.Add((uint)m.Pid);
+                }
             }
+            catch { }
+            _exCache = names;
+            _exPids = pids;
+            _exTick = Environment.TickCount64;
         }
-        catch { }
 
+        // Onbellegi kirletmemek icin kopya; on plan PID her seferinde taze.
+        excludedPids = new HashSet<uint>(_exPids);
         try
         {
             IntPtr fg = GetForegroundWindow();
@@ -360,10 +363,7 @@ public static class MemoryCleaner
                 excludedPids.Add(fgPid);
         }
         catch { }
-        _exCache = names;
-        _exPids = excludedPids;
-        _exTick = Environment.TickCount64;
-        return names;
+        return _exCache;
     }
 
     public static string NormalizeName(string n)
