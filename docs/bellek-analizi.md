@@ -46,3 +46,8 @@ Ek olarak: T-Link sunucusu (bir `Task` + bir named pipe, ~0,3-0,5 MB) ve 30 sn s
 1. `Get-Process T-RamCash | select WS, PM, HandleCount` -> UI acik / gizli (60 sn sonra).
 2. `dotnet-counters` ile `gc-heap-size`, `gen-0-gc-count`: tepside 10 dk'da 0-1 gen0 GC beklenir.
 3. VMMap: Managed Heap + Shareable WS karsilastirmasi.
+
+## Temizleme modlari (guvenlik duzeltmesi)
+
+- **Akilli:** surec baslarina `EmptyWorkingSet` (dislamalara saygili) + dusuk oncelikli bekleme listesi + sayfa birlestirme.
+- **Tam:** akilli adimlara ek olarak degistirilmis sayfalar, bekleme listesi, sistem dosya onbellegi ve registry onbellegi. `NtSetSystemInformation` komut 2 (`MemoryEmptyWorkingSets`, tum surecleri dislama gozetmeden bosaltir) **kaldirildi**; Tam mod da surec basina `EmptyWorkingSet` dongusunu kullanir. Bu dongu kendimizi, on plan sureci **ve onun tum alt/torun sureclerini** (Toolhelp `th32ParentProcessID`), T-Suite uygulamalarini ve kullanici dislama listesini atlar.

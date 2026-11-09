@@ -129,7 +129,8 @@ public class SettingsForm : Form
         // Tab 2: Bellek Temizleme
         var tabClean = new TabPage("Temizleme Alanları") { BackColor = CardBg };
         chkWorkingSets = AddCheckBox(tabClean, "Süreç çalışma kümeleri (Working Sets)", _settings.CleanProcessWorkingSets, 20, 20);
-        chkSystemWorkingSet = AddCheckBox(tabClean, "Sistem çalışma kümesi (yalnız Tam mod; tüm süreçleri boşaltır)", _settings.CleanSystemWorkingSet, 20, 50);
+        chkSystemWorkingSet = AddCheckBox(tabClean, "Sistem çalışma kümesi (kaldırıldı: dışlamaları yok sayıyordu)", _settings.CleanSystemWorkingSet, 20, 50);
+        chkSystemWorkingSet.Enabled = false; chkSystemWorkingSet.Visible = false;
         chkModifiedList = AddCheckBox(tabClean, "Değiştirilmiş sayfa listesi (Modified List)", _settings.CleanModifiedPageList, 20, 80);
         chkStandbyList = AddCheckBox(tabClean, "Bekleme listesi (Standby List / RAM Cache)", _settings.CleanStandbyList, 20, 110);
         chkStandbyLowPriority = AddCheckBox(tabClean, "Düşük öncelikli bekleme listesi", _settings.CleanStandbyLowPriority, 20, 140);

@@ -278,8 +278,8 @@ public static class MemoryCleaner
         if (!full || settings.CleanProcessWorkingSets)
             Step("Süreç çalışma kümeleri", () => { EmptyProcessWorkingSets(settings); return true; });
 
-        if (full && settings.CleanSystemWorkingSet)
-            Step("Sistem çalışma kümesi", () => NtMemCmd(MemoryCommand.EmptyWorkingSets));
+        // NOT: NtSetSystemInformation(MemoryEmptyWorkingSets) bilerek KULLANILMIYOR: tüm süreçleri
+        // dışlamaları yok sayarak boşaltır. Tam mod da dışlamalara saygı duyan süreç başına döngüyü kullanır.
 
         if (full && settings.CleanModifiedPageList)
             Step("Değiştirilmiş sayfalar", () => NtMemCmd(MemoryCommand.FlushModifiedList));
@@ -366,18 +366,29 @@ public static class MemoryCleaner
         {
             var pe = new PROCESSENTRY32 { dwSize = (uint)Unsafe.SizeOf<PROCESSENTRY32>() };
             if (!Process32FirstW(snap, ref pe)) return;
-            do
+            var all = new List<(uint pid, uint ppid, string name)>(300);
+            do { all.Add((pe.th32ProcessID, pe.th32ParentProcessID, pe.szExeFile)); }
+            while (Process32NextW(snap, ref pe));
+
+            // Ön plan sürecin alt süreçlerini (torunlar dahil) de koru.
+            var pending = new Queue<uint>(excludedPids);
+            while (pending.Count > 0)
             {
-                uint pid = pe.th32ProcessID;
+                uint parent = pending.Dequeue();
+                foreach (var e in all)
+                    if (e.ppid == parent && e.pid > 4 && excludedPids.Add(e.pid)) pending.Enqueue(e.pid);
+            }
+
+            foreach (var (pid, _, name) in all)
+            {
                 if (pid <= 4 || excludedPids.Contains(pid)) continue;
-                if (excludedNames.Contains(NormalizeName(pe.szExeFile))) continue;
+                if (excludedNames.Contains(NormalizeName(name))) continue;
 
                 IntPtr h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
                 if (h == IntPtr.Zero) continue; // korumalı / sistem süreci: sessizce geç
                 try { EmptyWorkingSet(h); }
                 finally { CloseHandle(h); }
             }
-            while (Process32NextW(snap, ref pe));
         }
         finally { CloseHandle(snap); }
     }
