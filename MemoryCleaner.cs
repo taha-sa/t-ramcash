@@ -19,6 +19,9 @@ public sealed class CleanResult
     public long DurationMs { get; init; }
     public CleanMode Mode { get; init; }
     public List<CleanStep> PerStep { get; init; } = new();
+    public bool IsAdmin { get; init; }
+    /// <summary>Adim hatasi / yetki eksigi durumunda Turkce aciklama; sorun yoksa null.</summary>
+    public string Note { get; init; }
 }
 
 public static class MemoryCleaner
@@ -261,9 +264,10 @@ public static class MemoryCleaner
         var steps = new List<CleanStep>(8);
         bool full = mode == CleanMode.Full;
 
-        EnablePrivilege("SeProfileSingleProcessPrivilege");
+        bool privOk = EnablePrivilege("SeProfileSingleProcessPrivilege");
         EnablePrivilege("SeIncreaseQuotaPrivilege");
         EnablePrivilege("SeDebugPrivilege");
+        bool admin = IsAdministrator;
 
         void Step(string name, Func<bool> action)
         {
@@ -300,12 +304,20 @@ public static class MemoryCleaner
             Step("Registry önbelleği", () => NtSetSystemInformation(SystemRegistryReconciliationInformation, IntPtr.Zero, 0) >= 0);
 
         ulong after = AvailPhys();
+        string note = null;
+        int failed = steps.FindAll(x => !x.Ok).Count;
+        if (full && (!admin || !privOk))
+            note = "Tam mod için yönetici gerekir: yalnızca kısmen temizlendi";
+        else if (failed > 0)
+            note = $"{failed} adım başarısız: " + string.Join(", ", steps.FindAll(x => !x.Ok).ConvertAll(x => x.Name));
         return new CleanResult
         {
             FreedMb = Math.Max(0, ((long)after - (long)before) / 1048576.0),
             DurationMs = sw.ElapsedMilliseconds,
             Mode = mode,
-            PerStep = steps
+            PerStep = steps,
+            IsAdmin = admin,
+            Note = note
         };
     }
 
@@ -422,7 +434,8 @@ public static class MemoryCleaner
                 PrivilegeCount = 1,
                 Privileges = new LUID_AND_ATTRIBUTES { Luid = luid, Attributes = SE_PRIVILEGE_ENABLED }
             };
-            return AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+            if (!AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero)) return false;
+            return Marshal.GetLastWin32Error() != 1300; // ERROR_NOT_ALL_ASSIGNED: yetki verilmedi
         }
         finally { CloseHandle(hToken); }
     }
