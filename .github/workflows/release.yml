@@ -1,0 +1,17 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'v*-beta*'
+permissions:
+  contents: read
+jobs:
+  release:
+    uses: taha-sa/t-suite/.github/workflows/app-release.yml@main
+    with:
+      app_id: t-ramcash
+      release_repo: taha-sa/t-ramcash-releases
+      version: ${{ github.ref_name }}
+      channel: ${{ contains(github.ref_name, '-beta') && 'beta' || 'stable' }}
+    secrets: inherit

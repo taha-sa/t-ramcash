@@ -1,0 +1,15 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: taha-sa/t-suite/.github/workflows/app-ci.yml@main
+    with:
+      app_project: MemReductGUI.csproj
+      test_projects: ''
+      dotnet_version: '10.0.x'
+    secrets:
+      TSUITE_READ_TOKEN: ${{ secrets.TSUITE_READ_TOKEN }}

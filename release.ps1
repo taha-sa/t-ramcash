@@ -11,9 +11,13 @@
 #>
 param(
   [Parameter(Mandatory = $true, Position = 0)][string]$Version,
-  [Parameter(Mandatory = $true, Position = 1)][string]$Notes,
+  [Parameter(Position = 1)][string]$Notes = '',
   [switch]$Publish,
-  [switch]$NoPublish
+  [switch]$NoPublish,
+  [string]$KeyPath,
+  [string]$ApplicationId,
+  [ValidateSet('stable', 'beta')][string]$Channel = 'stable',
+  [string]$ReleaseRepo = $env:TSUITE_RELEASE_REPO
 )
 $ErrorActionPreference = 'Stop'
 
@@ -23,15 +27,16 @@ $Project    = 'MemReductGUI.csproj'
 $ExeName    = 'T-RamCash.exe'
 $ArtifactAs = 'T-RamCash.zip'                               # zip: exe + TSuite.Updater yan dosyalari
 $Rid        = 'win-x64'
-$SuiteRoot  = 'C:\Users\hp\Projects\t-suite'                   # keygen/sign araci icin
+$SuiteRoot  = if ($env:TSuiteRoot) { $env:TSuiteRoot } else { 'C:\Users\hp\Projects\t-suite' } # keygen/sign araci icin
 $GhOwner    = 'taha-sa'
 # =============================================================
 
+if ($ApplicationId) { $AppId = $ApplicationId }
 if ($Version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Surum bicimi X.Y.Z olmali: $Version" }
-$repo   = "$GhOwner/$AppId-releases"
+$repo   = if ($ReleaseRepo) { $ReleaseRepo } else { "$GhOwner/$AppId-releases" }
 $out    = Join-Path $PSScriptRoot 'dist-release'
 $pub    = Join-Path $out 'pub'
-$keyPem = Join-Path $env:USERPROFILE ".t-suite\keys\$AppId.pem"
+$keyPem = if ($KeyPath) { (Resolve-Path -LiteralPath $KeyPath).Path } else { Join-Path $env:USERPROFILE ".t-suite\keys\$AppId.pem" }
 if (-not (Test-Path $keyPem)) { throw "Ozel anahtar yok: $keyPem (once: dotnet run --project $SuiteRoot\tools\keygen -- gen $AppId)" }
 
 Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue
@@ -39,7 +44,7 @@ New-Item -ItemType Directory $pub -Force | Out-Null
 
 Write-Host "==> publish $AppId $Version"
 dotnet publish $Project -c Release -r $Rid --self-contained false -p:PublishSingleFile=true `
-  -p:Version=$Version -p:AssemblyVersion="$($Version -replace '-.*$','').0" -o $pub
+  -p:Version=$Version -p:AssemblyVersion="$($Version -replace '-.*$','').0" "-p:TSuiteRoot=$SuiteRoot" -o $pub
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish basarisiz' }
 
 $requiredFiles = @($ExeName, 'TSuite.Updater.exe', 'TSuite.Updater.dll',
@@ -67,7 +72,7 @@ $sha = (Get-FileHash $artifact -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Host "==> sha256 $sha"
 
 $keygenProj = Join-Path $SuiteRoot 'tools\keygen\keygen.csproj'
-$sig = (dotnet run --project $keygenProj -c Release -- sign $AppId $Version $sha | Select-Object -Last 1).Trim()
+$sig = (dotnet run --project $keygenProj -c Release -v q -- sign $AppId $Version $sha $keyPem | Select-Object -Last 1).Trim()
 if (-not $sig) { throw 'imza uretilemedi' }
 
 $url = "https://github.com/$repo/releases/download/v$Version/$ArtifactAs"
@@ -78,6 +83,7 @@ $latest = [ordered]@{
   url      = $url
   sha256   = $sha
   signature = $sig
+  channel   = $Channel
 }
 $latestPath = Join-Path $out 'latest.json'
 [IO.File]::WriteAllText($latestPath, ($latest | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
@@ -85,7 +91,10 @@ Write-Host "==> $latestPath yazildi"
 
 if ($Publish -and -not $NoPublish) {
   Write-Host "==> gh release create v$Version --repo $repo"
-  gh release create "v$Version" $artifact $latestPath --repo $repo --title "$AppId v$Version" --notes $Notes
+  $releaseArgs = @('release', 'create', "v$Version", $artifact, $latestPath, '--repo', $repo, '--title', "$AppId v$Version")
+  if ($Notes) { $releaseArgs += @('--notes', $Notes) } else { $releaseArgs += '--generate-notes' }
+  if ($Channel -eq 'beta') { $releaseArgs += '--prerelease' }
+  gh @releaseArgs
   if ($LASTEXITCODE -ne 0) { throw 'gh release create basarisiz' }
 } else {
   Write-Host "==> YAYINLANMADI (-Publish verilmedi). Dosyalar: $out"
