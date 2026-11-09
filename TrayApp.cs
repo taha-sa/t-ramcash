@@ -331,8 +331,16 @@ public sealed class TrayApp : ApplicationContext
         try
         {
             string[] events = ["ram.status", "ram.cleaned", "app.update.available"];
-            string[] commands = ["ram.clean", "app.show", "app.version"];
+            string[] commands = ["ram.clean", "app.show", "app.version", .. UpdateLink.Commands];
             _link = new LinkServer(AppId, Version, events, commands);
+            // Standart güncelleme komutları (T-Bridge "Hepsini güncelle"): app.update.check / app.update.install
+            _updateCtl = new UpdateController(new UpdateChecker(MakeUpdateOptions()));
+            _updateCtl.ExitRequested += () => _sync.Post(_ => FullExit(), null);
+            _updateCtl.StateChanged += () =>
+            {
+                if (_updateCtl.State is UpdateState.Downloading) _sync.Post(_ => EnsureUpdateCard(), null);
+            };
+            UpdateLink.Register(_link, _updateCtl);
             _link.OnCommand("ram.clean", async (d, ct) =>
             {
                 var mode = CleanMode.Smart;
@@ -361,6 +369,17 @@ public sealed class TrayApp : ApplicationContext
 
     #region T-Update
 
+    UpdateController _updateCtl;
+    UpdateCard _updateCard;
+
+    public static UpdateOptions MakeUpdateOptions() => new() { AppId = AppId, CurrentVersion = Version, PublicKeyBase64 = UpdatePublicKey };
+
+    void EnsureUpdateCard()
+    {
+        if (_updateCtl == null || _updateCtl.Info == null) return;
+        if (_updateCard == null || _updateCard.IsDisposed) { _updateCard = new UpdateCard(_updateCtl, Theme); _updateCard.Show(); }
+    }
+
     void ScheduleUpdateCheck()
     {
         Task.Run(async () =>
@@ -368,13 +387,11 @@ public sealed class TrayApp : ApplicationContext
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
-                var checker = new UpdateChecker(new UpdateOptions { AppId = AppId, CurrentVersion = Version, PublicKeyBase64 = UpdatePublicKey });
-                var ctl = new UpdateController(checker);
+                var ctl = _updateCtl ?? new UpdateController(new UpdateChecker(MakeUpdateOptions()));
                 if (!await ctl.CheckAsync().ConfigureAwait(false) || ctl.Info == null) return;
                 var info = ctl.Info;
                 _link?.Publish("app.update.available", LinkJson.Obj(("version", info.NewVersion), ("notes", info.Notes)));
-                ctl.ExitRequested += () => _sync.Post(_ => FullExit(), null);
-                _sync.Post(_ => new UpdateCard(ctl, Theme).Show(), null);
+                _sync.Post(_ => EnsureUpdateCard(), null);
             }
             catch { /* ag yoksa sessizce gec */ }
         });

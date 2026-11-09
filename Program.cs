@@ -23,6 +23,13 @@ static class Program
             return;
         }
 
+        // T-Bridge "Hepsini güncelle": kapalıyken `--update` ile başlatılır -> kontrol, indirme, yardımcıyı başlat, çık (arayüz yok).
+        if (TSuite.Update.UpdateCli.IsRequested(args))
+        {
+            Environment.ExitCode = TSuite.Update.UpdateCli.RunAsync(TrayApp.MakeUpdateOptions()).GetAwaiter().GetResult();
+            return;
+        }
+
         using var mutex = new Mutex(true, MutexName, out bool createdNew);
         using var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
         if (!createdNew)
