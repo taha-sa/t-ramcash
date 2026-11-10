@@ -1,3 +1,4 @@
+using TSuite.Design;
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -13,8 +14,8 @@ namespace TRamCash;
 /// </summary>
 static class TrayIconRender
 {
-    static readonly Color Bg = Color.FromArgb(14, 14, 18);
-    static readonly Color Gold = Color.FromArgb(212, 160, 23);
+    static readonly Color Bg = TSuiteTokens.ColorNeutralDarkBg;
+    static readonly Color Accent = TSuiteTokens.ColorAccentTRamCashDarkBase;
 
     public static int IconSize()
     {
@@ -35,7 +36,7 @@ static class TrayIconRender
         g.PixelOffsetMode = PixelOffsetMode.Half;
 
         int bw = Math.Max(1, size / 16);
-        using (var pen = new Pen(Gold, bw) { Alignment = PenAlignment.Inset })
+        using (var pen = new Pen(Accent, bw) { Alignment = PenAlignment.Inset })
             g.DrawRectangle(pen, 0, 0, size - 1, size - 1);
 
         string text = TextFor(pct);
@@ -57,7 +58,7 @@ static class TrayIconRender
         using (font)
         {
             var r = new Rectangle(bw, bw, avail, avail);
-            TextRenderer.DrawText(g, text, font, r, Color.White,
+            TextRenderer.DrawText(g, text, font, r, TSuiteTokens.ColorNeutralDarkText,
                 TextFormatFlags.NoPadding | TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoClipping);
         }
         return bmp;
@@ -89,7 +90,7 @@ static class TrayIconRender
         using var sheet = new Bitmap(uniq.Length * (32 * Z + gap) + gap, sizes.Length * (32 * Z + gap) + gap);
         using (var g = Graphics.FromImage(sheet))
         {
-            g.Clear(Color.FromArgb(60, 60, 70));
+            g.Clear(TSuiteTokens.ColorNeutralDarkBorderStrong);
             g.InterpolationMode = InterpolationMode.NearestNeighbor;
             g.PixelOffsetMode = PixelOffsetMode.Half;
             for (int r = 0; r < sizes.Length; r++)

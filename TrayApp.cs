@@ -1,3 +1,4 @@
+using TSuite.Design;
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -75,9 +76,13 @@ public sealed class TrayApp : ApplicationContext
         Settings.ApplyStartupRegistration();
         MemoryCleaner.ReadSnapshot(ref Snap);
 
-        _menuHeader = new ToolStripMenuItem("T-RamCash") { ForeColor = Color.DarkGoldenrod };
+        _menuHeader = new ToolStripMenuItem("T-RamCash") { ForeColor = TSuiteTokens.ColorAccentTRamCashDarkBase };
         _menuHeader.Font = new Font(SystemFonts.MenuFont, FontStyle.Bold);
-        _menu = new ContextMenuStrip();
+        _menu = new ContextMenuStrip {
+            BackColor = TSuiteTokens.ColorNeutralDarkSurface1,
+            ForeColor = TSuiteTokens.ColorNeutralDarkText,
+            Renderer = new ToolStripProfessionalRenderer(new SuiteMenuColors())
+        };
         _menu.Items.Add(_menuHeader);
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add("Pencereyi Göster / Gizle", null, (s, e) => ToggleMain());
@@ -526,12 +531,24 @@ public sealed class TrayApp : ApplicationContext
     }
 
     internal static readonly UpdateTheme Theme = new(
-        Bg: Color.FromArgb(14, 14, 18), Surface: Color.FromArgb(20, 20, 26), Border: Color.FromArgb(34, 34, 44),
-        Accent: Color.FromArgb(212, 160, 23), AccentHover: Color.FromArgb(228, 176, 36),
-        Text: Color.FromArgb(240, 240, 245), TextDim: Color.FromArgb(145, 145, 158))
-    { OnAccent = Color.Black };
+        Bg: TSuiteTokens.ColorNeutralDarkBg, Surface: TSuiteTokens.ColorNeutralDarkSurface1, Border: TSuiteTokens.ColorNeutralDarkBorder,
+        Accent: TSuiteTokens.ColorAccentTRamCashDarkBase, AccentHover: TSuiteTokens.ColorAccentTRamCashDarkHover,
+        Text: TSuiteTokens.ColorNeutralDarkText, TextDim: TSuiteTokens.ColorNeutralDarkTextMuted)
+    { OnAccent = TSuiteTokens.ColorAccentTRamCashDarkOnAccent };
 
     #endregion
+
+    sealed class SuiteMenuColors : ProfessionalColorTable
+    {
+        public override Color MenuItemSelected => TSuiteTokens.ColorNeutralDarkSurface3;
+        public override Color MenuItemBorder => TSuiteTokens.ColorAccentTRamCashDarkBase;
+        public override Color MenuBorder => TSuiteTokens.ColorNeutralDarkBorder;
+        public override Color ImageMarginGradientBegin => TSuiteTokens.ColorNeutralDarkSurface1;
+        public override Color ImageMarginGradientMiddle => TSuiteTokens.ColorNeutralDarkSurface1;
+        public override Color ImageMarginGradientEnd => TSuiteTokens.ColorNeutralDarkSurface1;
+        public override Color SeparatorDark => TSuiteTokens.ColorNeutralDarkBorder;
+        public override Color SeparatorLight => TSuiteTokens.ColorNeutralDarkSurface1;
+    }
 
     sealed class HotkeyWindow : NativeWindow
     {

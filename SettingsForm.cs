@@ -1,3 +1,4 @@
+using TSuite.Design;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -30,11 +31,11 @@ public class SettingsForm : Form
 
     readonly AppSettings _settings;
 
-    static readonly Color BgDark = Color.FromArgb(16, 16, 20);
-    static readonly Color CardBg = Color.FromArgb(24, 24, 30);
-    static readonly Color DarkGold = Color.FromArgb(212, 160, 23);
-    static readonly Color TextWhite = Color.FromArgb(245, 245, 247);
-    static readonly Color TextMuted = Color.FromArgb(150, 150, 160);
+    static readonly Color BgDark = TSuiteTokens.ColorNeutralDarkBg;
+    static readonly Color CardBg = TSuiteTokens.ColorNeutralDarkSurface1;
+    static readonly Color Accent = TSuiteTokens.ColorAccentTRamCashDarkBase;
+    static readonly Color TextWhite = TSuiteTokens.ColorNeutralDarkText;
+    static readonly Color TextMuted = TSuiteTokens.ColorNeutralDarkTextMuted;
 
     CheckBox chkAlwaysOnTop;
     CheckBox chkStartWithWindows;
@@ -110,7 +111,7 @@ public class SettingsForm : Form
         {
             Text = "AYARLAR & TERCİHLER",
             Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold),
-            ForeColor = DarkGold,
+            ForeColor = Accent,
             Location = new Point(20, 15),
             AutoSize = true
         };
@@ -167,7 +168,7 @@ public class SettingsForm : Form
         {
             Text = "Otomasyon Kuralları:",
             Font = Gdi.GetFont("Segoe UI", 8F, FontStyle.Bold),
-            ForeColor = DarkGold,
+            ForeColor = Accent,
             Location = new Point(20, 180),
             AutoSize = true
         };
@@ -182,8 +183,8 @@ public class SettingsForm : Form
             Minimum = 10,
             Maximum = 99,
             Value = _settings.AutoCleanRatioThreshold,
-            BackColor = Color.FromArgb(34, 34, 40),
-            ForeColor = Color.White
+            BackColor = TSuiteTokens.ColorNeutralDarkSurface3,
+            ForeColor = TSuiteTokens.ColorNeutralDarkText
         };
         tabClean.Controls.Add(numAutoRatio);
 
@@ -196,8 +197,8 @@ public class SettingsForm : Form
             Minimum = 1,
             Maximum = 360,
             Value = _settings.AutoCleanIntervalMinutes,
-            BackColor = Color.FromArgb(34, 34, 40),
-            ForeColor = Color.White
+            BackColor = TSuiteTokens.ColorNeutralDarkSurface3,
+            ForeColor = TSuiteTokens.ColorNeutralDarkText
         };
         tabClean.Controls.Add(numAutoInterval);
 
@@ -206,7 +207,7 @@ public class SettingsForm : Form
         {
             Text = "Otomatik temizleme modu: Akıllı",
             Font = Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold),
-            ForeColor = DarkGold,
+            ForeColor = Accent,
             Location = new Point(20, 296),
             AutoSize = true
         });
@@ -233,7 +234,7 @@ public class SettingsForm : Form
         {
             Location = new Point(16, 64),
             Size = new Size(340, 200),
-            BackColor = Color.FromArgb(20, 20, 26),
+            BackColor = TSuiteTokens.ColorNeutralDarkSurface1,
             ForeColor = TextWhite,
             BorderStyle = BorderStyle.None,
             IntegralHeight = false,
@@ -261,13 +262,15 @@ public class SettingsForm : Form
             DialogResult = DialogResult.OK,
             Location = new Point(20, 442),
             Size = new Size(380, 38),
-            BackColor = DarkGold,
-            ForeColor = Color.Black,
+            BackColor = Accent,
+            ForeColor = TSuiteTokens.ColorAccentTRamCashDarkOnAccent,
             Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold),
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand
         };
         btnSave.FlatAppearance.BorderSize = 0;
+        btnSave.FlatAppearance.MouseOverBackColor = TSuiteTokens.ColorAccentTRamCashDarkHover;
+        btnSave.FlatAppearance.MouseDownBackColor = TSuiteTokens.ColorAccentTRamCashDarkPressed;
         btnSave.Click += (s, e) => SaveChanges();
         Controls.Add(btnSave);
         AcceptButton = btnSave;
@@ -280,14 +283,14 @@ public class SettingsForm : Form
             Text = text,
             Bounds = r,
             BackColor = CardBg,
-            ForeColor = DarkGold,
+            ForeColor = Accent,
             Font = Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold),
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand
         };
-        b.FlatAppearance.BorderColor = Color.FromArgb(34, 34, 44);
+        b.FlatAppearance.BorderColor = TSuiteTokens.ColorNeutralDarkBorder;
         b.FlatAppearance.BorderSize = 1;
-        b.FlatAppearance.MouseOverBackColor = Color.FromArgb(28, 28, 36);
+        b.FlatAppearance.MouseOverBackColor = TSuiteTokens.ColorNeutralDarkSurface2;
         return b;
     }
 
@@ -361,9 +364,9 @@ public class ProcessPickerForm : Form
     [DllImport("user32.dll")] static extern bool ReleaseCapture();
     [DllImport("user32.dll")] static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
 
-    static readonly Color BgDark = Color.FromArgb(16, 16, 20);
-    static readonly Color DarkGold = Color.FromArgb(212, 160, 23);
-    static readonly Color TextWhite = Color.FromArgb(245, 245, 247);
+    static readonly Color BgDark = TSuiteTokens.ColorNeutralDarkBg;
+    static readonly Color Accent = TSuiteTokens.ColorAccentTRamCashDarkBase;
+    static readonly Color TextWhite = TSuiteTokens.ColorNeutralDarkText;
 
     readonly ListBox _list;
     public string Selected { get; private set; }
@@ -385,7 +388,7 @@ public class ProcessPickerForm : Form
         {
             Text = "ÇALIŞAN SÜREÇLER",
             Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold),
-            ForeColor = DarkGold,
+            ForeColor = Accent,
             Dock = DockStyle.Top,
             Height = 40,
             Padding = new Padding(16, 14, 0, 0)
@@ -397,7 +400,7 @@ public class ProcessPickerForm : Form
         {
             Location = new Point(16, 48),
             Size = new Size(308, 304),
-            BackColor = Color.FromArgb(24, 24, 30),
+            BackColor = TSuiteTokens.ColorNeutralDarkSurface1,
             ForeColor = TextWhite,
             BorderStyle = BorderStyle.None,
             IntegralHeight = false,
@@ -414,18 +417,20 @@ public class ProcessPickerForm : Form
 
         var ok = new Button
         {
-            Text = "EKLE", Bounds = new Rectangle(16, 368, 196, 40), BackColor = DarkGold, ForeColor = Color.Black,
+            Text = "EKLE", Bounds = new Rectangle(16, 368, 196, 40), BackColor = Accent, ForeColor = TSuiteTokens.ColorAccentTRamCashDarkOnAccent,
             Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand
         };
         ok.FlatAppearance.BorderSize = 0;
+        ok.FlatAppearance.MouseOverBackColor = TSuiteTokens.ColorAccentTRamCashDarkHover;
+        ok.FlatAppearance.MouseDownBackColor = TSuiteTokens.ColorAccentTRamCashDarkPressed;
         ok.Click += (s, e) => Accept();
         var cancel = new Button
         {
-            Text = "Vazgeç", Bounds = new Rectangle(220, 368, 104, 40), BackColor = Color.FromArgb(24, 24, 30), ForeColor = DarkGold,
+            Text = "Vazgeç", Bounds = new Rectangle(220, 368, 104, 40), BackColor = TSuiteTokens.ColorNeutralDarkSurface1, ForeColor = Accent,
             Font = Gdi.GetFont("Segoe UI", 9F, FontStyle.Bold), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
             DialogResult = DialogResult.Cancel
         };
-        cancel.FlatAppearance.BorderColor = Color.FromArgb(34, 34, 44);
+        cancel.FlatAppearance.BorderColor = TSuiteTokens.ColorNeutralDarkBorder;
         Controls.Add(ok);
         Controls.Add(cancel);
         CancelButton = cancel;

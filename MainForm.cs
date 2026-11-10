@@ -1,3 +1,4 @@
+using TSuite.Design;
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -47,16 +48,16 @@ public class MainForm : Form
 
     #endregion
 
-    // Palet: Derin karbon siyahi & mat amber altin (#D4A017)
-    static readonly Color BgDark = Color.FromArgb(14, 14, 18);
-    static readonly Color CardBg = Color.FromArgb(20, 20, 26);
-    static readonly Color CardBorder = Color.FromArgb(34, 34, 44);
-    static readonly Color DarkGold = Color.FromArgb(212, 160, 23);
-    static readonly Color DarkGoldHover = Color.FromArgb(228, 176, 36);
-    static readonly Color TextWhite = Color.FromArgb(240, 240, 245);
-    static readonly Color TextMuted = Color.FromArgb(145, 145, 158);
-    static readonly Color TextDim = Color.FromArgb(92, 92, 104);
-    static readonly Color Surface = Color.FromArgb(28, 28, 36);
+    // T-Suite neutral palette and T-RamCash violet accent.
+    static readonly Color BgDark = TSuiteTokens.ColorNeutralDarkBg;
+    static readonly Color CardBg = TSuiteTokens.ColorNeutralDarkSurface1;
+    static readonly Color CardBorder = TSuiteTokens.ColorNeutralDarkBorder;
+    static readonly Color Accent = TSuiteTokens.ColorAccentTRamCashDarkBase;
+    static readonly Color AccentHover = TSuiteTokens.ColorAccentTRamCashDarkHover;
+    static readonly Color TextWhite = TSuiteTokens.ColorNeutralDarkText;
+    static readonly Color TextMuted = TSuiteTokens.ColorNeutralDarkTextMuted;
+    static readonly Color TextDim = TSuiteTokens.ColorNeutralDarkTextFaint;
+    static readonly Color Surface = TSuiteTokens.ColorNeutralDarkSurface2;
 
     const int HNone = 0, HClose = 1, HMin = 2, HSettings = 3, HAbout = 4, HClean = 5, HSmart = 6, HFull = 7, HAdmin = 8, HModeHelp = 9;
     // Tab sirasi
@@ -353,7 +354,7 @@ public class MainForm : Form
     void DrawHorizontalHeader(Graphics g)
     {
         g.DrawImageUnscaled(_logo, S(20), S(12));
-        g.DrawString("T-RAMCASH", Gdi.GetFont("Segoe UI", 10.5F, FontStyle.Bold), Gdi.GetBrush(DarkGold), S(48), S(12));
+        g.DrawString("T-RAMCASH", Gdi.GetFont("Segoe UI", 10.5F, FontStyle.Bold), Gdi.GetBrush(Accent), S(48), S(12));
         DrawFit(g, _sInfo, 8.5F, FontStyle.Regular, TextDim, _L.InfoText, Gdi.VCenterLeft);
 
         DrawNormalBtn(g, _rcAbout, HAbout, _hover == HAbout);
@@ -366,48 +367,8 @@ public class MainForm : Form
 
     void DrawCustomLogo(Graphics g, int x, int y, int s)
     {
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        var chipRect = new RectangleF(x, y, s, s);
-        float radius = s * 0.22f;
-        using var path = CreateRoundedRectanglePath(chipRect, radius);
-
-        using (var brBody = new LinearGradientBrush(chipRect, Color.FromArgb(28, 28, 36), Color.FromArgb(12, 12, 16), 90f))
-            g.FillPath(brBody, path);
-        using (var penRim = new Pen(Color.FromArgb(60, 60, 80), 1f))
-            g.DrawPath(penRim, path);
-
-        if (s >= 18)
-        {
-            var inRect = new RectangleF(x + 1.5f, y + 1.5f, s - 3f, s - 3f);
-            using var inPath = CreateRoundedRectanglePath(inRect, radius * 0.7f);
-            using var penInGold = new Pen(Color.FromArgb(90, 212, 160, 23), 1f);
-            g.DrawPath(penInGold, inPath);
-        }
-
-        float tW = s * 0.60f, tH = s * 0.54f;
-        float tX = x + (s - tW) / 2f, tY = y + (s - tH) / 2f;
-        float barH = Math.Max(2f, s * 0.16f), stemW = Math.Max(2f, s * 0.18f);
-        float chamfer = Math.Max(1f, s * 0.04f);
-        float stemLeft = tX + (tW - stemW) / 2f, stemRight = tX + (tW + stemW) / 2f;
-        float pointH = Math.Max(1.5f, s * 0.05f);
-
-        var pts = new PointF[]
-        {
-            new(tX + chamfer, tY), new(tX + tW - chamfer, tY), new(tX + tW, tY + chamfer), new(tX + tW, tY + barH),
-            new(stemRight, tY + barH), new(stemRight, tY + tH - pointH), new(x + (s * 0.5f), tY + tH),
-            new(stemLeft, tY + tH - pointH), new(stemLeft, tY + barH), new(tX, tY + barH), new(tX, tY + chamfer)
-        };
-
-        using var tPath = new GraphicsPath();
-        tPath.AddPolygon(pts);
-        using (var brGold = new LinearGradientBrush(new RectangleF(tX, tY, tW, tH),
-                   Color.FromArgb(245, 196, 52), Color.FromArgb(160, 110, 15), 65f))
-            g.FillPath(brGold, tPath);
-        if (s >= 18)
-        {
-            using var penTBorder = new Pen(Color.FromArgb(200, 255, 245, 180), 0.75f);
-            g.DrawPath(penTBorder, tPath);
-        }
+        using var image = BrandAssets.LoadLogo("t-ramcash");
+        g.DrawImage(image, x, y, s, s);
     }
 
     static GraphicsPath CreateRoundedRectanglePath(RectangleF rect, float radius)
@@ -427,7 +388,7 @@ public class MainForm : Form
     void DrawNormalBtn(Graphics g, Rectangle rc, int id, bool hover)
     {
         if (hover) g.FillRectangle(Gdi.GetBrush(Surface), rc);
-        var col = hover ? DarkGold : TextMuted;
+        var col = hover ? Accent : TextMuted;
         float lw = Math.Max(1.25f, S(2) * 0.7f);
         var pen = Gdi.GetPen(col, lw);
         pen.StartCap = pen.EndCap = LineCap.Round;
@@ -501,9 +462,9 @@ public class MainForm : Form
         DrawFit(g, sub, 8.5F, FontStyle.Regular, TextMuted, new RectangleF(x + pad, y + S(88), inner, S(22)), Gdi.TopLeft);
 
         int barW = w - 2 * pad, barY = y + S(114), barH = Math.Max(2, S(4));
-        g.FillRectangle(Gdi.GetBrush(Color.FromArgb(30, 30, 38)), x + pad, barY, barW, barH);
+        g.FillRectangle(Gdi.GetBrush(TSuiteTokens.ColorNeutralDarkSurface3), x + pad, barY, barW, barH);
         int fillW = (int)((barW * Math.Min(100u, load)) / 100.0);
-        if (fillW > 0) g.FillRectangle(Gdi.GetBrush(DarkGold), x + pad, barY, fillW, barH);
+        if (fillW > 0) g.FillRectangle(Gdi.GetBrush(Accent), x + pad, barY, fillW, barH);
 
         DrawFit(g, foot, 8.5F, FontStyle.Regular, TextDim, new RectangleF(x + pad, y + S(140), inner, S(22)), Gdi.TopLeft);
     }
@@ -516,13 +477,13 @@ public class MainForm : Form
         FillCard(g, card);
         bool admin = MemoryCleaner.IsAdministrator;
 
-        DrawFit(g, admin ? "● YÖNETİCİ MODU" : "○ STANDART MOD", 8F, FontStyle.Bold, admin ? DarkGold : TextMuted,
+        DrawFit(g, admin ? "● YÖNETİCİ MODU" : "○ STANDART MOD", 8F, FontStyle.Bold, admin ? Accent : TextMuted,
             new RectangleF(x + pad, y + S(16), inner, S(18)), Gdi.TopLeft);
         DrawFit(g, admin ? "Tam önbellek yetkili" : "Yönetici ile tam yetki", 7.5F, FontStyle.Regular, TextDim,
             new RectangleF(x + pad, y + S(34), inner, S(14)), Gdi.TopLeft);
 
         if (!admin)
-            DrawFit(g, "▸ Yönetici olarak yeniden başlat", 7F, FontStyle.Underline, _hover == HAdmin ? TextWhite : DarkGold,
+            DrawFit(g, "▸ Yönetici olarak yeniden başlat", 7F, FontStyle.Underline, _hover == HAdmin ? TextWhite : Accent,
                 new RectangleF(x + pad, y + S(48), inner, S(16)), Gdi.TopLeft);
         DrawToggle(g);
         DrawCleanButton(g);
@@ -545,9 +506,9 @@ public class MainForm : Form
     {
         var inner = Rectangle.Inflate(r, -S(3), -S(3));
         if (t > 0.01f)
-            g.FillPath(Gdi.GetBrush(Color.FromArgb((int)(255 * t), DarkGold)), Gdi.RoundedPath(inner, S(6)));
+            g.FillPath(Gdi.GetBrush(Color.FromArgb((int)(255 * t), Accent)), Gdi.RoundedPath(inner, S(6)));
         Color unselected = hover ? TextWhite : TextMuted;
-        g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), Gdi.GetBrush(Gdi.Lerp(unselected, BgDark, t)), r, Gdi.Center);
+        g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), Gdi.GetBrush(Gdi.Lerp(unselected, TSuiteTokens.ColorAccentTRamCashDarkOnAccent, t)), r, Gdi.Center);
     }
 
     void DrawCleanButton(Graphics g)
@@ -558,21 +519,21 @@ public class MainForm : Form
         {
             g.FillPath(Gdi.GetBrush(Surface), path);
             g.DrawPath(Gdi.GetPen(CardBorder), path);
-            g.DrawString("Temizleniyor…", Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(DarkGold), r, Gdi.Center);
+            g.DrawString("Temizleniyor…", Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(Accent), r, Gdi.Center);
 
-            // Animasyonlu altin alt cizgi: etiketin altinda soldan saga kayan segment
+            // Animated accent underline.
             float phase = (_clock.ElapsedMilliseconds % 1100) / 1100f;
             int span = r.Width - S(24), segW = span / 3;
             int sx = r.X + S(12) + (int)((span + segW) * phase) - segW;
             int x0 = Math.Max(sx, r.X + S(12)), x1 = Math.Min(sx + segW, r.X + S(12) + span);
             float lw = Math.Max(2f, S(2));
             g.DrawLine(Gdi.GetPen(CardBorder, lw), r.X + S(12), r.Bottom - S(10), r.X + S(12) + span, r.Bottom - S(10));
-            if (x1 > x0) g.DrawLine(Gdi.GetPen(DarkGold, lw), x0, r.Bottom - S(10), x1, r.Bottom - S(10));
+            if (x1 > x0) g.DrawLine(Gdi.GetPen(Accent, lw), x0, r.Bottom - S(10), x1, r.Bottom - S(10));
         }
         else
         {
-            g.FillPath(Gdi.GetBrush(_hover == HClean ? DarkGoldHover : DarkGold), path);
-            g.DrawString("BELLEĞİ TEMİZLE", Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(Color.Black), r, Gdi.Center);
+            g.FillPath(Gdi.GetBrush(_hover == HClean ? AccentHover : Accent), path);
+            g.DrawString("BELLEĞİ TEMİZLE", Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(TSuiteTokens.ColorAccentTRamCashDarkOnAccent), r, Gdi.Center);
         }
     }
 
@@ -592,7 +553,7 @@ public class MainForm : Form
         var r = new Rectangle(_toastRect.X, _toastRect.Y + dy, _toastRect.Width, _toastRect.Height);
         var path = Gdi.RoundedPath(r, S(8));
         g.FillPath(Gdi.GetBrush(Color.FromArgb(alpha, CardBg)), path);
-        g.DrawPath(Gdi.GetPen(Color.FromArgb(alpha, DarkGold)), path);
+        g.DrawPath(Gdi.GetPen(Color.FromArgb(alpha, Accent)), path);
         g.DrawString(_toastText, Gdi.GetFont("Segoe UI", 9F), Gdi.GetBrush(Color.FromArgb(alpha, TextWhite)), r, Gdi.Center);
     }
 
@@ -700,7 +661,7 @@ public class MainForm : Form
     {
         if (_focus == HNone) return;
         var r = Rectangle.Inflate(RectOf(_focus), S(2), S(2));
-        g.DrawPath(Gdi.GetPen(DarkGold, 1.5f), Gdi.RoundedPath(r, S(8)));
+        g.DrawPath(Gdi.GetPen(Accent, 1.5f), Gdi.RoundedPath(r, S(8)));
     }
 
     void ShowModeHelp()
@@ -718,7 +679,7 @@ public class MainForm : Form
             _modeTip.Draw += (_, e) =>
             {
                 e.Graphics.FillRectangle(Gdi.GetBrush(Surface), e.Bounds);
-                e.Graphics.DrawRectangle(Gdi.GetPen(DarkGold), 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
+                e.Graphics.DrawRectangle(Gdi.GetPen(Accent), 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
                 TextRenderer.DrawText(e.Graphics, ModeHelpText, Gdi.GetFont("Segoe UI", 9f),
                     Rectangle.Inflate(e.Bounds, -S(12), -S(12)), TextWhite,
                     TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
