@@ -295,11 +295,14 @@ public static class MemoryCleaner
         if (settings.CleanProcessWorkingSets)
             Step(Strings.ProcessSets, () => { EmptyProcessWorkingSets(settings); return true; });
 
-        // NOT: NtSetSystemInformation(MemoryEmptyWorkingSets) bilerek KULLANILMIYOR: tüm süreçleri
-        // dışlamaları yok sayarak boşaltır. Tek mod da dışlamalara ve yerleşik sistem listesine saygı duyar.
-
         if (privOk)
         {
+            // Kullanıcının özel dışlama listesi yoksa çekirdek düzeyinde tüm çalışma kümelerini (sistem + korumalı süreçler)
+            // Mem Reduct ile aynı NtSetSystemInformation(MemoryEmptyWorkingSets) çağrısıyla temizle.
+            bool hasCustomExclusions = settings.ExcludedProcesses != null && settings.ExcludedProcesses.Count > 0;
+            if (settings.CleanSystemWorkingSet && !hasCustomExclusions)
+                Step(Strings.ProcessSets, () => NtMemCmd(MemoryCommand.EmptyWorkingSets));
+
             if (settings.CleanModifiedPageList)
                 Step(Strings.ModifiedPages, () => NtMemCmd(MemoryCommand.FlushModifiedList));
 
