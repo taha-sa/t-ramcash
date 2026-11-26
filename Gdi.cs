@@ -113,7 +113,7 @@ static class Gdi
     public static StringFormat TopLeft => _topLeft ??= new StringFormat(StringFormatFlags.NoWrap) { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near, Trimming = StringTrimming.EllipsisCharacter };
     public static StringFormat Center => _center ??= new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
     public static StringFormat HCenter => _hCenter ??= new StringFormat { Alignment = StringAlignment.Center };
-    public static StringFormat VCenterLeft => _vCenterLeft ??= new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+    public static StringFormat VCenterLeft => _vCenterLeft ??= new StringFormat(StringFormatFlags.NoWrap) { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter };
 
     public static Color Lerp(Color a, Color b, float t)
     {

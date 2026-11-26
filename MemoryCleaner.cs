@@ -259,74 +259,81 @@ public static class MemoryCleaner
     /// </summary>
     static readonly object _cleanLock = new();
 
-    public static CleanResult Clean(AppSettings settings, CleanMode mode)
+    public static CleanResult Clean(AppSettings settings, CleanMode mode = CleanMode.Full)
     {
         lock (_cleanLock)
         {
-            // SeDebugPrivilege en az ayricalik: yalniz Tam modda ve temizlik suresince acik, sonra geri alinir.
-            bool dbg = mode == CleanMode.Full && SetPrivilege("SeDebugPrivilege", true);
-            try { return CleanCore(settings, mode); }
+            // Tek birlesik temizlik: yetki varsa tum etkin sistem adimlari + SeDebugPrivilege (yalniz temizlik suresince).
+            bool dbg = IsAdministrator && SetPrivilege("SeDebugPrivilege", true);
+            try { return CleanCore(settings); }
             finally { if (dbg) SetPrivilege("SeDebugPrivilege", false); }
         }
     }
 
-    static CleanResult CleanCore(AppSettings settings, CleanMode mode)
+    static CleanResult CleanCore(AppSettings settings)
     {
         var sw = Stopwatch.StartNew();
         ulong before = AvailPhys();
-        var steps = new List<CleanStep>(8);
-        bool full = mode == CleanMode.Full;
+        ulong lastAvail = before;
+        var steps = new List<CleanStep>(7);
 
-        bool privOk = EnablePrivilege("SeProfileSingleProcessPrivilege");
-        EnablePrivilege("SeIncreaseQuotaPrivilege");
         bool admin = IsAdministrator;
+        bool privOk = admin && EnablePrivilege("SeProfileSingleProcessPrivilege");
+        bool quotaOk = admin && EnablePrivilege("SeIncreaseQuotaPrivilege");
 
         void Step(string name, Func<bool> action)
         {
-            ulong a = AvailPhys();
+            ulong a = lastAvail;
             long t0 = sw.ElapsedMilliseconds;
             bool ok;
             try { ok = action(); } catch { ok = false; }
             ulong b = AvailPhys();
+            lastAvail = b;
             steps.Add(new CleanStep(name, Math.Max(0, ((long)b - (long)a) / 1048576.0), sw.ElapsedMilliseconds - t0, ok));
         }
 
-        if (!full || settings.CleanProcessWorkingSets)
-            Step(Strings.ProcessSets, () => { EmptyProcessWorkingSets(settings, full); return true; });
+        if (settings.CleanProcessWorkingSets)
+            Step(Strings.ProcessSets, () => { EmptyProcessWorkingSets(settings); return true; });
 
         // NOT: NtSetSystemInformation(MemoryEmptyWorkingSets) bilerek KULLANILMIYOR: tüm süreçleri
-        // dışlamaları yok sayarak boşaltır. Tam mod da dışlamalara saygı duyan süreç başına döngüyü kullanır.
+        // dışlamaları yok sayarak boşaltır. Tek mod da dışlamalara ve yerleşik sistem listesine saygı duyar.
 
-        if (full && settings.CleanModifiedPageList)
-            Step(Strings.ModifiedPages, () => NtMemCmd(MemoryCommand.FlushModifiedList));
+        if (privOk)
+        {
+            if (settings.CleanModifiedPageList)
+                Step(Strings.ModifiedPages, () => NtMemCmd(MemoryCommand.FlushModifiedList));
 
-        if (full && settings.CleanStandbyList)
-            Step(Strings.Standby, () => NtMemCmd(MemoryCommand.PurgeStandbyList));
+            if (settings.CleanStandbyList)
+                Step(Strings.Standby, () => NtMemCmd(MemoryCommand.PurgeStandbyList));
 
-        if (!full || settings.CleanStandbyLowPriority)
-            Step(Strings.LowPriority, () => NtMemCmd(MemoryCommand.PurgeLowPriorityStandbyList));
+            if (settings.CleanStandbyLowPriority)
+                Step(Strings.LowPriority, () => NtMemCmd(MemoryCommand.PurgeLowPriorityStandbyList));
 
-        if (full)
-            Step(Strings.FileCache, () => SetSystemFileCacheSize(UIntPtr.MaxValue, UIntPtr.MaxValue, 0));
+            if (quotaOk)
+                Step(Strings.FileCache, () => SetSystemFileCacheSize(UIntPtr.MaxValue, UIntPtr.MaxValue, 0));
 
-        if (Environment.OSVersion.Version.Build >= 9600) // Win 8.1+
-            Step(Strings.CombinePages, CombinePageLists);
+            if (Environment.OSVersion.Version.Build >= 9600) // Win 8.1+
+                Step(Strings.CombinePages, CombinePageLists);
 
-        if (full && Environment.OSVersion.Version.Build >= 17134) // Win10 1803+
-            Step(Strings.RegistryCache, () => NtSetSystemInformation(SystemRegistryReconciliationInformation, IntPtr.Zero, 0) >= 0);
+            if (Environment.OSVersion.Version.Build >= 17134) // Win10 1803+
+                Step(Strings.RegistryCache, () => NtSetSystemInformation(SystemRegistryReconciliationInformation, IntPtr.Zero, 0) >= 0);
+        }
 
-        ulong after = AvailPhys();
+        ulong after = lastAvail;
         string note = null;
-        int failed = steps.FindAll(x => !x.Ok).Count;
-        if (full && (!admin || !privOk))
-            note = Strings.AdminRequired;
-        else if (failed > 0)
-            note = Strings.Format(Strings.FailedSteps, failed, string.Join(", ", steps.FindAll(x => !x.Ok).ConvertAll(x => x.Name)));
+        List<string> failedNames = null;
+        foreach (var st in steps)
+        {
+            if (!st.Ok) (failedNames ??= new List<string>(4)).Add(st.Name);
+        }
+        if (failedNames != null)
+            note = Strings.Format(Strings.FailedSteps, failedNames.Count, string.Join(", ", failedNames));
+
         return new CleanResult
         {
             FreedMb = Math.Max(0, ((long)after - (long)before) / 1048576.0),
             DurationMs = sw.ElapsedMilliseconds,
-            Mode = mode,
+            Mode = CleanMode.Full,
             PerStep = steps,
             IsAdmin = admin,
             Note = note
@@ -414,7 +421,7 @@ public static class MemoryCleaner
         "dwm", "audiodg", "csrss", "winlogon", "explorer", "ctfmon", "sihost", "taskhostw"
     };
 
-    static void EmptyProcessWorkingSets(AppSettings settings, bool fullMode)
+    static void EmptyProcessWorkingSets(AppSettings settings)
     {
         var excludedNames = BuildExcludedNames(settings, out var excludedPids);
         IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -423,24 +430,36 @@ public static class MemoryCleaner
         {
             var pe = new PROCESSENTRY32 { dwSize = (uint)Unsafe.SizeOf<PROCESSENTRY32>() };
             if (!Process32FirstW(snap, ref pe)) return;
-            var all = new List<(uint pid, uint ppid, string name)>(300);
-            do { all.Add((pe.th32ProcessID, pe.th32ParentProcessID, pe.szExeFile)); }
+            var all = new List<(uint pid, string name)>(300);
+            var children = new Dictionary<uint, List<uint>>(128);
+            do
+            {
+                uint pid = pe.th32ProcessID;
+                uint ppid = pe.th32ParentProcessID;
+                all.Add((pid, pe.szExeFile));
+                if (pid > 4 && ppid != 0 && ppid != pid)
+                {
+                    if (!children.TryGetValue(ppid, out var list))
+                        children[ppid] = list = new List<uint>(4);
+                    list.Add(pid);
+                }
+            }
             while (Process32NextW(snap, ref pe));
 
-            // Ön plan sürecin alt süreçlerini (torunlar dahil) de koru.
+            // Ön plan ve hariç tutulan süreçlerin alt süreçlerini (torunlar dahil) O(N) BFS ile koru.
             var pending = new Queue<uint>(excludedPids);
             while (pending.Count > 0)
             {
-                uint parent = pending.Dequeue();
-                foreach (var e in all)
-                    if (e.ppid == parent && e.pid > 4 && excludedPids.Add(e.pid)) pending.Enqueue(e.pid);
+                if (!children.TryGetValue(pending.Dequeue(), out var kids)) continue;
+                foreach (uint kid in kids)
+                    if (excludedPids.Add(kid)) pending.Enqueue(kid);
             }
 
-            foreach (var (pid, _, name) in all)
+            foreach (var (pid, name) in all)
             {
                 if (pid <= 4 || excludedPids.Contains(pid)) continue;
-                if (excludedNames.Contains(NormalizeName(name))) continue;
-                if (fullMode && BuiltinSkipNames.Contains(NormalizeName(name))) continue;
+                string norm = NormalizeName(name);
+                if (excludedNames.Contains(norm) || BuiltinSkipNames.Contains(norm)) continue;
 
                 IntPtr h = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
                 if (h == IntPtr.Zero) continue; // korumalı / sistem süreci: sessizce geç

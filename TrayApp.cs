@@ -89,8 +89,7 @@ public sealed class TrayApp : ApplicationContext
         _menu.Items.Add(_menuHeader);
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(Strings.ToggleWindow, null, (s, e) => ToggleMain());
-        _menu.Items.Add(Strings.CleanSmart, null, (s, e) => RequestClean(CleanMode.Smart, false));
-        _menu.Items.Add(Strings.CleanDeep, null, (s, e) => RequestClean(CleanMode.Full, false));
+        _menu.Items.Add(Strings.CleanMemory, null, (s, e) => RequestClean(CleanMode.Full, false));
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(Strings.TaskManager, null, (s, e) => OpenTaskManager());
         _menu.Items.Add(Strings.SettingsMenu, null, (s, e) => OpenSettings(_main));
@@ -112,7 +111,7 @@ public sealed class TrayApp : ApplicationContext
 
         _hot.Create();
         HotkeyOk = RegisterHotKey(_hot.Handle, HOTKEY_ID, MOD_CONTROL, VK_F1);
-        _hot.HotKey += () => RequestClean(ManualMode, false);
+        _hot.HotKey += () => RequestClean(CleanMode.Full, false);
 
         _tick.Tick += (s, e) => OnTick();
         _tick.Start();
@@ -167,10 +166,10 @@ public sealed class TrayApp : ApplicationContext
         if (since < 10) return; // son temizlikten sonraki 10 sn icinde otomatik temizlik yok
 
         if (Settings.AutoCleanByRatio && Snap.MemoryLoadPercent >= Settings.AutoCleanRatioThreshold && now >= _ratioNextTick)
-        { RequestClean(CleanMode.Smart, true, ratioRun: true); return; }
+        { RequestClean(CleanMode.Full, true, ratioRun: true); return; }
 
         if (Settings.AutoCleanByInterval && since >= Settings.AutoCleanIntervalMinutes * 60.0)
-            RequestClean(CleanMode.Smart, true); // otomatik her zaman Akilli
+            RequestClean(CleanMode.Full, true);
     }
 
     void UpdateTrayIcon()

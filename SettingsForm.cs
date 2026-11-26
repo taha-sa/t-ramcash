@@ -213,23 +213,7 @@ public class SettingsForm : Form
         };
         tabClean.Controls.Add(numAutoInterval);
 
-        // Otomatik temizleme modu (sabit: Akıllı)
-        tabClean.Controls.Add(new Label
-        {
-            Text = Strings.AutoMode,
-            Font = Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold),
-            ForeColor = Accent,
-            Location = new Point(20, 296),
-            AutoSize = true
-        });
-        tabClean.Controls.Add(new Label
-        {
-            Text = Strings.AutoHelp,
-            Font = Gdi.GetFont("Segoe UI", 8F),
-            ForeColor = TextMuted,
-            Location = new Point(20, 316),
-            Size = new Size(480, 70)
-        });
+
 
         // Tab 4: Hariç tutulanlar
         var tabExc = new TabPage(Strings.Exclusions) { BackColor = CardBg };

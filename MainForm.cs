@@ -59,12 +59,11 @@ public class MainForm : Form
     static readonly Color TextDim = TSuiteTokens.ColorNeutralDarkTextFaint;
     static readonly Color Surface = TSuiteTokens.ColorNeutralDarkSurface2;
 
-    const int HNone = 0, HClose = 1, HMin = 2, HSettings = 3, HAbout = 4, HClean = 5, HSmart = 6, HFull = 7, HAdmin = 8, HModeHelp = 9;
+    const int HNone = 0, HClose = 1, HMin = 2, HSettings = 3, HAbout = 4, HClean = 5, HAdmin = 8;
     // Tab sirasi
-    static readonly int[] FocusOrder = { HAbout, HSettings, HMin, HClose, HSmart, HFull, HModeHelp, HClean };
+    static readonly int[] FocusOrder = { HAbout, HSettings, HMin, HClose, HClean };
     int _focus = HNone;
-    ToolTip _tip, _modeTip;
-    static string ModeHelpText => Strings.ModeHelp;
+    ToolTip _tip;
 
     readonly TrayApp _app;
     readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
@@ -76,7 +75,7 @@ public class MainForm : Form
     Icon _icon;
 
     // Yerlesim
-    Rectangle _rcClose, _rcMin, _rcSettings, _rcAbout, _rcCleanBtn, _rcToggle, _rcSmart, _rcFull, _rcAdmin;
+    Rectangle _rcClose, _rcMin, _rcSettings, _rcAbout, _rcCleanBtn, _rcAdmin;
     int _hover = HNone;
 
     // Onbellekli metinler (yalnizca veri degisince yeniden uretilir)
@@ -84,9 +83,8 @@ public class MainForm : Form
     ulong _kAvail; uint _kLoad, _kProc, _kPageLoad; string _kStatus; bool _kCleaning;
 
     // Animasyon durumu
-    readonly float[] _seg = new float[2];   // 0 = Akilli, 1 = Tam secili orani
-    long _lastAnimMs;
     string _toastText; long _toastStart = -1; Rectangle _toastRect;
+    bool _toastHoldPainted;
     const int ToastIn = 150, ToastHold = 3000, ToastOut = 150;
 
     public MainForm(TrayApp app)
@@ -118,9 +116,6 @@ public class MainForm : Form
             SetLayoutRects();
             AccessibleName = "T-RamCash"; AccessibleRole = AccessibleRole.Window;
 
-            _seg[0] = app.ManualMode == CleanMode.Smart ? 1f : 0f;
-            _seg[1] = 1f - _seg[0];
-
             ApplyRegion();
             RebuildLogo();
 
@@ -138,7 +133,7 @@ public class MainForm : Form
     void SetLayoutRects()
     {
         _rcClose = _L.Close; _rcMin = _L.Min; _rcSettings = _L.Settings; _rcAbout = _L.About;
-        _rcToggle = _L.Toggle; _rcSmart = _L.Smart; _rcFull = _L.Full; _rcCleanBtn = _L.CleanBtn; _rcAdmin = _L.Admin;
+        _rcCleanBtn = _L.CleanBtn; _rcAdmin = _L.Admin;
     }
 
     void ApplyRegion()
@@ -173,7 +168,6 @@ public class MainForm : Form
         if (IsDisposed) return;
         _L = RcLayout.Compute(DeviceDpi);
         SetLayoutRects();
-        _modeTip?.Hide(this);
         Gdi.ResetScaled();
         if (Size != new Size(_L.W, _L.H)) Size = new Size(_L.W, _L.H);
         ApplyRegion();
@@ -202,7 +196,6 @@ public class MainForm : Form
             _anim.Dispose();
             _logo?.Dispose();
             _tip?.Dispose();
-            _modeTip?.Dispose();
         }
         base.Dispose(disposing);
         if (disposing)
@@ -286,12 +279,13 @@ public class MainForm : Form
             : mb >= 1024 ? Strings.Format(Strings.FreedGb, mb / 1024.0) : Strings.Format(Strings.FreedMb, mb);
         _toastText = r.Note != null
             ? $"{freed} · {r.Note}"
-            : Strings.Format(Strings.ToastResult, freed, r.Mode == CleanMode.Full ? Strings.Deep : Strings.Smart, r.DurationMs);
+            : $"{freed} · {r.DurationMs} ms";
         var sz = TextRenderer.MeasureText(_toastText, Gdi.GetFont("Segoe UI", 9f, FontStyle.Regular));
-        int w = Math.Min(Width - S(32), sz.Width + S(32));
+        int w = Math.Min(Width - S(32), Math.Max(S(160), sz.Width + S(32)));
         var oldToast = _toastRect;
         _toastRect = new Rectangle((Width - w) / 2, Height - S(16) - S(34), w, S(34));
         _toastStart = _clock.ElapsedMilliseconds;
+        _toastHoldPainted = false;
         EnsureAnim();
         if (!oldToast.IsEmpty) Invalidate(Rectangle.Inflate(oldToast, S(4), S(14)));
         Invalidate(Rectangle.Inflate(_toastRect, S(4), S(14)));
@@ -301,38 +295,39 @@ public class MainForm : Form
 
     #region Animasyon (yalnizca gerekirken calisir)
 
-    bool NeedsAnim()
-    {
-        if (_app.IsCleaning || _toastStart >= 0) return true;
-        float t0 = _app.ManualMode == CleanMode.Smart ? 1f : 0f;
-        return _seg[0] != t0 || _seg[1] != 1f - t0;
-    }
+    bool NeedsAnim() => _app.IsCleaning || _toastStart >= 0;
 
     void EnsureAnim()
     {
-        if (!_anim.Enabled && Visible) { _lastAnimMs = _clock.ElapsedMilliseconds; _anim.Start(); }
+        if (!_anim.Enabled && Visible) _anim.Start();
     }
 
     void AnimTick()
     {
         long now = _clock.ElapsedMilliseconds;
-        float step = (now - _lastAnimMs) / 120f; // 120 ms renk gecisi
-        _lastAnimMs = now;
-        float t0 = _app.ManualMode == CleanMode.Smart ? 1f : 0f;
-        _seg[0] = MoveToward(_seg[0], t0, step);
-        _seg[1] = MoveToward(_seg[1], 1f - t0, step);
+        if (_app.IsCleaning)
+            Invalidate(Rectangle.Inflate(_rcCleanBtn, S(2), S(2)));
 
-        bool toastEnding = _toastStart >= 0 && now - _toastStart > ToastIn + ToastHold + ToastOut;
-        if (toastEnding) _toastStart = -1;
-
-        Invalidate(Rectangle.Inflate(_rcToggle, S(2), S(2)));
-        Invalidate(Rectangle.Inflate(_rcCleanBtn, S(2), S(2)));
-        if (!_toastRect.IsEmpty) Invalidate(Rectangle.Inflate(_toastRect, S(4), S(14)));
+        if (_toastStart >= 0)
+        {
+            long dt = now - _toastStart;
+            if (dt > ToastIn + ToastHold + ToastOut)
+            {
+                _toastStart = -1;
+                if (!_toastRect.IsEmpty) Invalidate(Rectangle.Inflate(_toastRect, S(4), S(14)));
+            }
+            else if (dt < ToastIn || dt >= ToastIn + ToastHold)
+            {
+                if (!_toastRect.IsEmpty) Invalidate(Rectangle.Inflate(_toastRect, S(4), S(14)));
+            }
+            else if (!_toastHoldPainted)
+            {
+                _toastHoldPainted = true;
+                if (!_toastRect.IsEmpty) Invalidate(Rectangle.Inflate(_toastRect, S(4), S(14)));
+            }
+        }
         if (!NeedsAnim()) _anim.Stop();
     }
-
-    static float MoveToward(float v, float target, float step)
-        => v < target ? Math.Min(target, v + step) : Math.Max(target, v - step);
 
     #endregion
 
@@ -411,16 +406,7 @@ public class MainForm : Form
                 g.DrawLine(pen, cx, cy - 0.5f * u, cx, cy + 3f * u);
                 g.FillEllipse(Gdi.GetBrush(col), cx - 1f * u, cy - 3.8f * u, 2f * u, 2f * u);
                 break;
-            case HModeHelp:
-                g.DrawEllipse(pen, cx - 7f * u, cy - 7f * u, 14f * u, 14f * u);
-                using (var question = new GraphicsPath())
-                {
-                    question.AddBezier(cx - 2.5f * u, cy - 2.5f * u, cx - 2.5f * u, cy - 6f * u, cx + 5f * u, cy - 4f * u, cx + 2f * u, cy - 0.5f * u);
-                    question.AddLine(cx + 2f * u, cy - 0.5f * u, cx, cy + 1.5f * u);
-                    g.DrawPath(pen, question);
-                }
-                g.FillEllipse(Gdi.GetBrush(col), cx - 0.8f * u, cy + 3.5f * u, 1.6f * u, 1.6f * u);
-                break;
+
             case HSettings:
                 using (var gp = GearPath(cx, cy, 6.5f * u, 4.6f * u, 8)) g.DrawPath(pen, gp);
                 g.DrawEllipse(pen, cx - 2f * u, cy - 2f * u, 4f * u, 4f * u);
@@ -485,47 +471,12 @@ public class MainForm : Form
             new RectangleF(x + pad, y + S(34), inner, S(14)), Gdi.TopLeft);
 
         if (!admin)
-            DrawFit(g, Strings.AdminLink, 7F, FontStyle.Underline, _hover == HAdmin ? TextWhite : Accent,
-                new RectangleF(x + pad, y + S(48), inner, S(16)), Gdi.TopLeft);
-        DrawToggle(g);
+            DrawFit(g, Strings.AdminLink, 7.5F, FontStyle.Underline, _hover == HAdmin ? TextWhite : Accent,
+                new RectangleF(_rcAdmin.X, _rcAdmin.Y, _rcAdmin.Width, _rcAdmin.Height), Gdi.VCenterLeft);
         DrawCleanButton(g);
 
         DrawFit(g, _app.HotkeyOk ? Strings.Hotkey : Strings.HotkeyBusy, 8F, FontStyle.Regular, TextDim,
-            new RectangleF(x, y + S(148), w, S(32)), Gdi.HCenter);
-    }
-
-    // Segmentli anahtar: [ Akıllı | Tam ]
-    void DrawToggle(Graphics g)
-    {
-        g.FillPath(Gdi.GetBrush(BgDark), Gdi.RoundedPath(_rcToggle, S(8)));
-        g.DrawPath(Gdi.GetPen(CardBorder), Gdi.RoundedPath(_rcToggle, S(8)));
-        DrawSegment(g, _rcSmart, Strings.Smart, _seg[0], _hover == HSmart);
-        DrawSegment(g, _rcFull, Strings.Deep, _seg[1], _hover == HFull);
-        DrawNormalBtn(g, _L.ModeHelp, HModeHelp, _hover == HModeHelp);
-    }
-
-    void DrawSegment(Graphics g, Rectangle r, string text, float t, bool hover)
-    {
-        var inner = Rectangle.Inflate(r, -S(3), -S(3));
-        if (t > 0.01f)
-        {
-            var path = Gdi.RoundedPath(inner, S(6));
-            if (t >= 0.999f)
-                g.FillPath(Gdi.GetBrush(Accent), path);
-            else
-            {
-                using var b = new SolidBrush(Color.FromArgb((int)(255 * t), Accent));
-                g.FillPath(b, path);
-            }
-        }
-        Color unselected = hover ? TextWhite : TextMuted;
-        if (t <= 0.001f || t >= 0.999f)
-            g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), Gdi.GetBrush(t >= 0.999f ? TSuiteTokens.ColorAccentTRamCashDarkOnAccent : unselected), r, Gdi.Center);
-        else
-        {
-            using var tb = new SolidBrush(Gdi.Lerp(unselected, TSuiteTokens.ColorAccentTRamCashDarkOnAccent, t));
-            g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), tb, r, Gdi.Center);
-        }
+            new RectangleF(x + pad, y + S(142), inner, S(24)), Gdi.HCenter);
     }
 
     void DrawCleanButton(Graphics g)
@@ -569,12 +520,14 @@ public class MainForm : Form
 
         var r = new Rectangle(_toastRect.X, _toastRect.Y + dy, _toastRect.Width, _toastRect.Height);
         if (r.Width <= 0 || r.Height <= 0) return;
+        var textRect = Rectangle.Inflate(r, -S(10), 0);
+        var font = Gdi.FitFont(g, _toastText, "Segoe UI", 9F, FontStyle.Regular, Math.Max(16, textRect.Width));
         if (alpha >= 255 && dy == 0)
         {
             var path = Gdi.RoundedPath(r, S(8));
             g.FillPath(Gdi.GetBrush(CardBg), path);
             g.DrawPath(Gdi.GetPen(Accent), path);
-            g.DrawString(_toastText, Gdi.GetFont("Segoe UI", 9F), Gdi.GetBrush(TextWhite), r, Gdi.Center);
+            g.DrawString(_toastText, font, Gdi.GetBrush(TextWhite), textRect, Gdi.Center);
         }
         else
         {
@@ -584,7 +537,7 @@ public class MainForm : Form
             using var textBrush = new SolidBrush(Color.FromArgb(alpha, TextWhite));
             g.FillPath(bgBrush, path);
             g.DrawPath(borderPen, path);
-            g.DrawString(_toastText, Gdi.GetFont("Segoe UI", 9F), textBrush, r, Gdi.Center);
+            g.DrawString(_toastText, font, textBrush, textRect, Gdi.Center);
         }
     }
 
@@ -604,9 +557,6 @@ public class MainForm : Form
         if (_rcMin.Contains(p)) return HMin;
         if (_rcSettings.Contains(p)) return HSettings;
         if (_rcAbout.Contains(p)) return HAbout;
-        if (_L.ModeHelp.Contains(p)) return HModeHelp;
-        if (_rcSmart.Contains(p)) return HSmart;
-        if (_rcFull.Contains(p)) return HFull;
         if (_rcCleanBtn.Contains(p)) return HClean;
         if (!MemoryCleaner.IsAdministrator && _rcAdmin.Contains(p)) return HAdmin;
         return HNone;
@@ -614,14 +564,14 @@ public class MainForm : Form
 
     Rectangle RectOf(int id) => id switch
     {
-        HModeHelp => _L.ModeHelp, HClose => _rcClose, HMin => _rcMin, HSettings => _rcSettings, HAbout => _rcAbout,
-        HSmart => _rcSmart, HFull => _rcFull, HClean => _rcCleanBtn, HAdmin => _rcAdmin, _ => Rectangle.Empty
+        HClose => _rcClose, HMin => _rcMin, HSettings => _rcSettings, HAbout => _rcAbout,
+        HClean => _rcCleanBtn, HAdmin => _rcAdmin, _ => Rectangle.Empty
     };
 
     static string NameOf(int id) => id switch
     {
         HClose => Strings.HideWindow, HMin => Strings.MinimizeTray, HSettings => Strings.Settings, HAbout => Strings.About,
-        HModeHelp => Strings.ModeHelpName, HSmart => Strings.SmartMode, HFull => Strings.DeepMode, HClean => Strings.CleanMemory, HAdmin => Strings.RestartAdmin, _ => ""
+        HClean => Strings.CleanMemory, HAdmin => Strings.RestartAdmin, _ => ""
     };
 
     void ActivateItem(int id)
@@ -632,10 +582,7 @@ public class MainForm : Form
             case HMin: BeginInvoke(new Action(_app.HideMain)); return;   // kucultunce tepsiye gizle
             case HSettings: _app.OpenSettings(this); return;
             case HAbout: _app.OpenAbout(this); return;
-            case HModeHelp: ShowModeHelp(); return;
-            case HSmart: SetMode(CleanMode.Smart); return;
-            case HFull: SetMode(CleanMode.Full); return;
-            case HClean: _app.RequestClean(_app.ManualMode, false); return;
+            case HClean: _app.RequestClean(CleanMode.Full, false); return;
             case HAdmin: _app.RestartAsAdmin(); return;
         }
     }
@@ -695,34 +642,8 @@ public class MainForm : Form
         g.DrawPath(Gdi.GetPen(Accent, 1.5f), Gdi.RoundedPath(r, S(8)));
     }
 
-    void ShowModeHelp()
-    {
-        _tip?.Hide(this);
-        if (_modeTip == null)
-        {
-            _modeTip = new ToolTip { OwnerDraw = true, InitialDelay = 0, ReshowDelay = 0 };
-            _modeTip.Popup += (_, e) =>
-            {
-                var size = TextRenderer.MeasureText(ModeHelpText, Gdi.GetFont("Segoe UI", 9f),
-                    new Size(S(300), int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
-                e.ToolTipSize = new Size(size.Width + S(24), size.Height + S(24));
-            };
-            _modeTip.Draw += (_, e) =>
-            {
-                e.Graphics.FillRectangle(Gdi.GetBrush(Surface), e.Bounds);
-                e.Graphics.DrawRectangle(Gdi.GetPen(Accent), 0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1);
-                TextRenderer.DrawText(e.Graphics, ModeHelpText, Gdi.GetFont("Segoe UI", 9f),
-                    Rectangle.Inflate(e.Bounds, -S(12), -S(12)), TextWhite,
-                    TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
-            };
-        }
-        _modeTip.Show(ModeHelpText, this, _L.ModeHelp.Right - S(324), _L.ModeHelp.Bottom + S(4), 15000);
-    }
-
     void ShowTip(int id)
     {
-        if (id == HModeHelp) { ShowModeHelp(); return; }
-        _modeTip?.Hide(this);
         string t = NameOf(id);
         if (t.Length == 0) return;
         _tip ??= new ToolTip { InitialDelay = 0, ReshowDelay = 0 };
@@ -750,13 +671,7 @@ public class MainForm : Form
         public override void DoDefaultAction() => f.ActivateItem(id);
     }
 
-    void SetMode(CleanMode m)
-    {
-        if (_app.ManualMode == m) return;
-        _app.ManualMode = m;
-        EnsureAnim();
-        Invalidate();
-    }
+
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
