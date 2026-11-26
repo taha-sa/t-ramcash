@@ -279,7 +279,7 @@ public class MainForm : Form
             : mb >= 1024 ? Strings.Format(Strings.FreedGb, mb / 1024.0) : Strings.Format(Strings.FreedMb, mb);
         _toastText = r.Note != null
             ? $"{freed} · {r.Note}"
-            : $"{freed} · {r.DurationMs} ms";
+            : freed;
         var sz = TextRenderer.MeasureText(_toastText, Gdi.GetFont("Segoe UI", 9f, FontStyle.Regular));
         int w = Math.Min(Width - S(32), Math.Max(S(160), sz.Width + S(32)));
         var oldToast = _toastRect;
