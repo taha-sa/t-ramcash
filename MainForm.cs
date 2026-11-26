@@ -64,7 +64,7 @@ public class MainForm : Form
     static readonly int[] FocusOrder = { HAbout, HSettings, HMin, HClose, HSmart, HFull, HModeHelp, HClean };
     int _focus = HNone;
     ToolTip _tip, _modeTip;
-    const string ModeHelpText = "Akıllı: Arka plandaki uygulamaların gereksiz belleğini boşaltır, açık işinize dokunmaz (önerilen).\n\nTam: Önbellek dahil her şeyi boşaltır; yönetici izni gerekir, kısa süre yavaşlık olabilir.";
+    static string ModeHelpText => Strings.ModeHelp;
 
     readonly TrayApp _app;
     readonly System.Windows.Forms.Timer _refresh = new() { Interval = 1000 };
@@ -144,7 +144,9 @@ public class MainForm : Form
     void ApplyRegion()
     {
         int rr = S(16);
-        using var ptr = new RegionHandle(CreateRoundRectRgn(0, 0, Width + 1, Height + 1, rr, rr));
+        IntPtr h = CreateRoundRectRgn(0, 0, Width + 1, Height + 1, rr, rr);
+        if (h == IntPtr.Zero) return;
+        using var ptr = new RegionHandle(h);
         var old = Region;
         Region = Region.FromHrgn(ptr.Handle);
         old?.Dispose();
@@ -188,6 +190,8 @@ public class MainForm : Form
         public void Dispose() => DeleteObject(Handle);
     }
 
+    bool _gdiReleased;
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -196,7 +200,7 @@ public class MainForm : Form
             _app.CleanCompleted -= OnCleanCompleted;
             _refresh.Dispose();
             _anim.Dispose();
-            _logo.Dispose();
+            _logo?.Dispose();
             _tip?.Dispose();
             _modeTip?.Dispose();
         }
@@ -204,7 +208,7 @@ public class MainForm : Form
         if (disposing)
         {
             _icon?.Dispose();
-            Gdi.Release();
+            if (!_gdiReleased) { _gdiReleased = true; Gdi.Release(); }
         }
     }
 
@@ -252,13 +256,13 @@ public class MainForm : Form
         _kPageLoad = s.PageFileLoadPercent; _kStatus = status; _kCleaning = cleaning;
 
         const double GB = 1024.0 * 1024.0 * 1024.0;
-        _sPct = "%" + s.MemoryLoadPercent;
-        _sUsed = $"{s.UsedPhysicalBytes / GB:F1} GB  /  {s.TotalPhysicalBytes / GB:F1} GB";
-        _sFree = $"Kullanılabilir: {s.AvailablePhysicalBytes / GB:F1} GB";
-        _sPagePct = "%" + s.PageFileLoadPercent;
-        _sPage = $"{s.UsedPageFileBytes / GB:F1} GB  /  {s.TotalPageFileBytes / GB:F1} GB";
-        _sCache = $"Sistem Cache: {s.SystemCacheBytes / (1024.0 * 1024.0):F0} MB";
-        _sInfo = $"● {status}  ·  {s.ProcessCount} Aktif Süreç";
+        _sPct = Localization.Percent(s.MemoryLoadPercent);
+        _sUsed = Strings.Format(Strings.MemoryPair, s.UsedPhysicalBytes / GB, s.TotalPhysicalBytes / GB);
+        _sFree = Strings.Format(Strings.Available, s.AvailablePhysicalBytes / GB);
+        _sPagePct = Localization.Percent(s.PageFileLoadPercent);
+        _sPage = Strings.Format(Strings.MemoryPair, s.UsedPageFileBytes / GB, s.TotalPageFileBytes / GB);
+        _sCache = Strings.Format(Strings.CacheSize, s.SystemCacheBytes / (1024.0 * 1024.0));
+        _sInfo = Strings.Format(Strings.StatusProcesses, status, s.ProcessCount);
         Invalidate(_L.InfoInv); // bilgi satiri
         Invalidate(_L.CardsInv); // bellek kartlari
     }
@@ -278,11 +282,11 @@ public class MainForm : Form
     void OnCleanCompleted(CleanResult r)
     {
         double mb = r.FreedMb;
-        string freed = mb < 1 ? "Boşaltılacak bellek bulunamadı"
-            : mb >= 1024 ? $"+{mb / 1024.0:F1} GB boşaltıldı" : $"+{mb:F0} MB boşaltıldı";
+        string freed = mb < 1 ? Strings.NoMemory
+            : mb >= 1024 ? Strings.Format(Strings.FreedGb, mb / 1024.0) : Strings.Format(Strings.FreedMb, mb);
         _toastText = r.Note != null
             ? $"{freed} · {r.Note}"
-            : $"{freed} · {(r.Mode == CleanMode.Full ? "Tam" : "Akıllı")} · {r.DurationMs} ms";
+            : Strings.Format(Strings.ToastResult, freed, r.Mode == CleanMode.Full ? Strings.Deep : Strings.Smart, r.DurationMs);
         var sz = TextRenderer.MeasureText(_toastText, Gdi.GetFont("Segoe UI", 9f, FontStyle.Regular));
         int w = Math.Min(Width - S(32), sz.Width + S(32));
         var oldToast = _toastRect;
@@ -344,8 +348,8 @@ public class MainForm : Form
         g.DrawRectangle(Gdi.GetPen(CardBorder), 0, 0, Width - 1, Height - 1);
 
         DrawHorizontalHeader(g);
-        DrawColumn(g, _L.Card1, "FİZİKSEL BELLEK", _sPct, _sUsed, _app.Snap.MemoryLoadPercent, _sFree);
-        DrawColumn(g, _L.Card2, "SANAL & ÖNBELLEK", _sPagePct, _sPage, _app.Snap.PageFileLoadPercent, _sCache);
+        DrawColumn(g, _L.Card1, Strings.PhysicalMemory, _sPct, _sUsed, _app.Snap.MemoryLoadPercent, _sFree);
+        DrawColumn(g, _L.Card2, Strings.VirtualCache, _sPagePct, _sPage, _app.Snap.PageFileLoadPercent, _sCache);
         DrawColumnAction(g, _L.Card3);
         if (_toastStart >= 0) DrawToast(g);
         DrawFocus(g);
@@ -354,7 +358,7 @@ public class MainForm : Form
     void DrawHorizontalHeader(Graphics g)
     {
         g.DrawImageUnscaled(_logo, S(20), S(12));
-        g.DrawString("T-RAMCASH", Gdi.GetFont("Segoe UI", 10.5F, FontStyle.Bold), Gdi.GetBrush(Accent), S(48), S(12));
+        g.DrawString("T-RamCash", Gdi.GetFont("Segoe UI", 10.5F, FontStyle.Bold), Gdi.GetBrush(Accent), S(48), S(12));
         DrawFit(g, _sInfo, 8.5F, FontStyle.Regular, TextDim, _L.InfoText, Gdi.VCenterLeft);
 
         DrawNormalBtn(g, _rcAbout, HAbout, _hover == HAbout);
@@ -390,9 +394,7 @@ public class MainForm : Form
         if (hover) g.FillRectangle(Gdi.GetBrush(Surface), rc);
         var col = hover ? Accent : TextMuted;
         float lw = Math.Max(1.25f, S(2) * 0.7f);
-        var pen = Gdi.GetPen(col, lw);
-        pen.StartCap = pen.EndCap = LineCap.Round;
-        pen.LineJoin = LineJoin.Round;
+        var pen = Gdi.GetPen(col, lw, round: true);
         float cx = rc.X + rc.Width / 2f, cy = rc.Y + rc.Height / 2f;
         float u = S(1);
         switch (id)
@@ -477,18 +479,18 @@ public class MainForm : Form
         FillCard(g, card);
         bool admin = MemoryCleaner.IsAdministrator;
 
-        DrawFit(g, admin ? "● YÖNETİCİ MODU" : "○ STANDART MOD", 8F, FontStyle.Bold, admin ? Accent : TextMuted,
+        DrawFit(g, admin ? Strings.AdminMode : Strings.StandardMode, 8F, FontStyle.Bold, admin ? Accent : TextMuted,
             new RectangleF(x + pad, y + S(16), inner, S(18)), Gdi.TopLeft);
-        DrawFit(g, admin ? "Tam önbellek yetkili" : "Yönetici ile tam yetki", 7.5F, FontStyle.Regular, TextDim,
+        DrawFit(g, admin ? Strings.FullPermission : Strings.NeedAdmin, 7.5F, FontStyle.Regular, TextDim,
             new RectangleF(x + pad, y + S(34), inner, S(14)), Gdi.TopLeft);
 
         if (!admin)
-            DrawFit(g, "▸ Yönetici olarak yeniden başlat", 7F, FontStyle.Underline, _hover == HAdmin ? TextWhite : Accent,
+            DrawFit(g, Strings.AdminLink, 7F, FontStyle.Underline, _hover == HAdmin ? TextWhite : Accent,
                 new RectangleF(x + pad, y + S(48), inner, S(16)), Gdi.TopLeft);
         DrawToggle(g);
         DrawCleanButton(g);
 
-        DrawFit(g, _app.HotkeyOk ? "Kısayol: Ctrl + F1" : "Kısayol kullanılamıyor (başka uygulama kullanıyor)", 8F, FontStyle.Regular, TextDim,
+        DrawFit(g, _app.HotkeyOk ? Strings.Hotkey : Strings.HotkeyBusy, 8F, FontStyle.Regular, TextDim,
             new RectangleF(x, y + S(148), w, S(32)), Gdi.HCenter);
     }
 
@@ -497,8 +499,8 @@ public class MainForm : Form
     {
         g.FillPath(Gdi.GetBrush(BgDark), Gdi.RoundedPath(_rcToggle, S(8)));
         g.DrawPath(Gdi.GetPen(CardBorder), Gdi.RoundedPath(_rcToggle, S(8)));
-        DrawSegment(g, _rcSmart, "Akıllı", _seg[0], _hover == HSmart);
-        DrawSegment(g, _rcFull, "Tam", _seg[1], _hover == HFull);
+        DrawSegment(g, _rcSmart, Strings.Smart, _seg[0], _hover == HSmart);
+        DrawSegment(g, _rcFull, Strings.Deep, _seg[1], _hover == HFull);
         DrawNormalBtn(g, _L.ModeHelp, HModeHelp, _hover == HModeHelp);
     }
 
@@ -506,9 +508,24 @@ public class MainForm : Form
     {
         var inner = Rectangle.Inflate(r, -S(3), -S(3));
         if (t > 0.01f)
-            g.FillPath(Gdi.GetBrush(Color.FromArgb((int)(255 * t), Accent)), Gdi.RoundedPath(inner, S(6)));
+        {
+            var path = Gdi.RoundedPath(inner, S(6));
+            if (t >= 0.999f)
+                g.FillPath(Gdi.GetBrush(Accent), path);
+            else
+            {
+                using var b = new SolidBrush(Color.FromArgb((int)(255 * t), Accent));
+                g.FillPath(b, path);
+            }
+        }
         Color unselected = hover ? TextWhite : TextMuted;
-        g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), Gdi.GetBrush(Gdi.Lerp(unselected, TSuiteTokens.ColorAccentTRamCashDarkOnAccent, t)), r, Gdi.Center);
+        if (t <= 0.001f || t >= 0.999f)
+            g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), Gdi.GetBrush(t >= 0.999f ? TSuiteTokens.ColorAccentTRamCashDarkOnAccent : unselected), r, Gdi.Center);
+        else
+        {
+            using var tb = new SolidBrush(Gdi.Lerp(unselected, TSuiteTokens.ColorAccentTRamCashDarkOnAccent, t));
+            g.DrawString(text, Gdi.GetFont("Segoe UI", 8.5F, FontStyle.Bold), tb, r, Gdi.Center);
+        }
     }
 
     void DrawCleanButton(Graphics g)
@@ -519,7 +536,7 @@ public class MainForm : Form
         {
             g.FillPath(Gdi.GetBrush(Surface), path);
             g.DrawPath(Gdi.GetPen(CardBorder), path);
-            g.DrawString("Temizleniyor…", Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(Accent), r, Gdi.Center);
+            g.DrawString(Strings.Cleaning, Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(Accent), r, Gdi.Center);
 
             // Animated accent underline.
             float phase = (_clock.ElapsedMilliseconds % 1100) / 1100f;
@@ -533,7 +550,7 @@ public class MainForm : Form
         else
         {
             g.FillPath(Gdi.GetBrush(_hover == HClean ? AccentHover : Accent), path);
-            g.DrawString("BELLEĞİ TEMİZLE", Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(TSuiteTokens.ColorAccentTRamCashDarkOnAccent), r, Gdi.Center);
+            g.DrawString(Strings.CleanNow, Gdi.GetFont("Segoe UI", 9.5F, FontStyle.Bold), Gdi.GetBrush(TSuiteTokens.ColorAccentTRamCashDarkOnAccent), r, Gdi.Center);
         }
     }
 
@@ -551,10 +568,24 @@ public class MainForm : Form
         int alpha = (int)(255 * a);
 
         var r = new Rectangle(_toastRect.X, _toastRect.Y + dy, _toastRect.Width, _toastRect.Height);
-        var path = Gdi.RoundedPath(r, S(8));
-        g.FillPath(Gdi.GetBrush(Color.FromArgb(alpha, CardBg)), path);
-        g.DrawPath(Gdi.GetPen(Color.FromArgb(alpha, Accent)), path);
-        g.DrawString(_toastText, Gdi.GetFont("Segoe UI", 9F), Gdi.GetBrush(Color.FromArgb(alpha, TextWhite)), r, Gdi.Center);
+        if (r.Width <= 0 || r.Height <= 0) return;
+        if (alpha >= 255 && dy == 0)
+        {
+            var path = Gdi.RoundedPath(r, S(8));
+            g.FillPath(Gdi.GetBrush(CardBg), path);
+            g.DrawPath(Gdi.GetPen(Accent), path);
+            g.DrawString(_toastText, Gdi.GetFont("Segoe UI", 9F), Gdi.GetBrush(TextWhite), r, Gdi.Center);
+        }
+        else
+        {
+            using var path = CreateRoundedRectanglePath(r, S(8));
+            using var bgBrush = new SolidBrush(Color.FromArgb(alpha, CardBg));
+            using var borderPen = new Pen(Color.FromArgb(alpha, Accent));
+            using var textBrush = new SolidBrush(Color.FromArgb(alpha, TextWhite));
+            g.FillPath(bgBrush, path);
+            g.DrawPath(borderPen, path);
+            g.DrawString(_toastText, Gdi.GetFont("Segoe UI", 9F), textBrush, r, Gdi.Center);
+        }
     }
 
     void FillCard(Graphics g, Rectangle r)
@@ -589,8 +620,8 @@ public class MainForm : Form
 
     static string NameOf(int id) => id switch
     {
-        HClose => "Pencereyi gizle", HMin => "Tepsiye küçült", HSettings => "Ayarlar", HAbout => "Hakkında",
-        HModeHelp => "Akıllı ve Tam mod açıklaması", HSmart => "Akıllı mod", HFull => "Tam mod", HClean => "Belleği temizle", HAdmin => "Yönetici olarak yeniden başlat", _ => ""
+        HClose => Strings.HideWindow, HMin => Strings.MinimizeTray, HSettings => Strings.Settings, HAbout => Strings.About,
+        HModeHelp => Strings.ModeHelpName, HSmart => Strings.SmartMode, HFull => Strings.DeepMode, HClean => Strings.CleanMemory, HAdmin => Strings.RestartAdmin, _ => ""
     };
 
     void ActivateItem(int id)
@@ -715,7 +746,7 @@ public class MainForm : Form
         public override AccessibleRole Role => AccessibleRole.PushButton;
         public override AccessibleObject Parent => parent;
         public override Rectangle Bounds => f.RectangleToScreen(f.RectOf(id));
-        public override string DefaultAction => "Etkinleştir";
+        public override string DefaultAction => Strings.Activate;
         public override void DoDefaultAction() => f.ActivateItem(id);
     }
 

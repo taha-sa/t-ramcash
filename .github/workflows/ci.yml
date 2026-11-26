@@ -5,6 +5,26 @@ on:
 permissions:
   contents: read
 jobs:
+  resources:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: app
+      - name: Check localization keys and placeholders
+        shell: pwsh
+        run: ./app/scripts/Check-Resources.ps1
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/checkout@v4
+        with:
+          repository: taha-sa/t-suite
+          token: ${{ secrets.TSUITE_READ_TOKEN }}
+          path: t-suite-sdk
+      - name: Check localized UI and update dialog closing
+        shell: pwsh
+        run: dotnet run --project app/tests/TRamCash.UiChecks -c Release -p:TSuiteRoot="$pwd/t-suite-sdk"
   ci:
     uses: taha-sa/t-suite/.github/workflows/app-ci.yml@main
     with:

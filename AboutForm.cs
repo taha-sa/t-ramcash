@@ -16,6 +16,7 @@ public class AboutForm : Form
     [DllImport("user32.dll")]
     static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
     readonly List<Image> _images = new();
+    readonly List<Font> _fonts = new();
     static readonly Color Bg = TSuiteTokens.ColorNeutralDarkBg;
     static readonly Color TextColor = TSuiteTokens.ColorNeutralDarkText;
     static readonly Color Muted = TSuiteTokens.ColorNeutralDarkTextMuted;
@@ -23,9 +24,9 @@ public class AboutForm : Form
 
     public AboutForm()
     {
-        Text = "T-RamCash • Hakkında";
+        Text = Strings.AboutTitle;
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(440, 520);
+        ClientSize = new Size(560, 560);
         MinimumSize = new Size(400, 380);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.None;
@@ -34,9 +35,9 @@ public class AboutForm : Form
         MinimizeBox = false;
         BackColor = Bg;
         ForeColor = TextColor;
-        Font = new Font("Segoe UI", 9);
+        Font = TrackFont(9);
         var header = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = TSuiteTokens.ColorNeutralDarkSurface1 };
-        var title = MakeLabel("T-RamCash • Hakkında", 320, 36, 10);
+        var title = MakeLabel(Strings.AboutTitle, 320, 36, 10);
         title.Padding = new Padding(16, 0, 0, 0);
         title.MouseDown += (_, e) => {
             if (e.Button != MouseButtons.Left) return;
@@ -48,19 +49,21 @@ public class AboutForm : Form
         dismiss.AutoSize = false;
         dismiss.Width = 36;
         dismiss.Dock = DockStyle.Right;
-        dismiss.AccessibleName = "Kapat";
+        dismiss.AccessibleName = Strings.Close;
         header.Controls.Add(dismiss);
         var body = new FlowLayoutPanel {
             Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown,
             WrapContents = false, Padding = new Padding(16), BackColor = Bg
         };
-        var footer = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 52,
+        var footer = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 82,
             FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8) };
-        var close = MakeButton("Kapat", () => Close(), true);
+        var close = MakeButton(Strings.Close, () => Close(), true);
         footer.Controls.Add(close);
-        footer.Controls.Add(MakeButton("Sorun bildir", () => Open("https://github.com/taha-sa/t-ramcash-releases/issues")));
-        footer.Controls.Add(MakeButton("Tanıyı kopyala", () => Clipboard.SetText(
-            $"T-RamCash {TrayApp.Version}\n{RuntimeInformation.OSDescription}\nOS: {RuntimeInformation.OSArchitecture}; Process: {RuntimeInformation.ProcessArchitecture}")));
+        footer.Controls.Add(MakeButton(Strings.ReportIssue, () => Open("https://github.com/taha-sa/t-ramcash-releases/issues")));
+        footer.Controls.Add(MakeButton(Strings.CopyDiagnostics, () => {
+            try { Clipboard.SetText($"T-RamCash {TrayApp.Version}\n{RuntimeInformation.OSDescription}\n{RuntimeInformation.OSArchitecture} / {RuntimeInformation.ProcessArchitecture}"); }
+            catch { MessageBox.Show(this, Strings.ActionFailed, Strings.CopyDiagnostics); }
+        }));
         Controls.Add(body);
         Controls.Add(footer);
         Controls.Add(header);
@@ -68,9 +71,10 @@ public class AboutForm : Form
         CancelButton = close;
         body.Controls.Add(Logo("t-ramcash", 64, 360));
         body.Controls.Add(MakeLabel("T-RamCash", 360, 40, 20, ContentAlignment.MiddleCenter));
-        body.Controls.Add(MakeLabel($"Sürüm {TrayApp.Version} • {RuntimeInformation.ProcessArchitecture}", 360, 24, 9, ContentAlignment.MiddleCenter, Muted));
-        body.Controls.Add(MakeLabel("● Çalışıyor", 360, 24, 9, ContentAlignment.MiddleCenter, TSuiteTokens.ColorStateDarkSuccessBase));
-        body.Controls.Add(MakeLabel("T-Suite ailesinin parçası", 360, 32, 12));
+        body.Controls.Add(MakeLabel(Strings.Format(Strings.VersionInfo, TrayApp.Version, RuntimeInformation.ProcessArchitecture), 360, 24, 9, ContentAlignment.MiddleCenter, Muted));
+        body.Controls.Add(MakeLabel(Strings.Running, 360, 24, 9, ContentAlignment.MiddleCenter, TSuiteTokens.ColorStateDarkSuccessBase));
+        body.Controls.Add(MakeLabel(Strings.SuiteFamily, 360, 32, 12));
+        body.Controls.Add(BridgeInvitation.CreateRow(this));
         var registry = new AppRegistry();
         foreach (var (id, name) in new[] {
             ("t-bridge", "T-Bridge"), ("t-downloader", "T-Downloader"),
@@ -89,23 +93,24 @@ public class AboutForm : Form
             var appTitle = MakeLabel(name, 170, 22, 10);
             appTitle.Location = new Point(48, 2);
             row.Controls.Add(appTitle);
-            var status = MakeLabel(current ? $"Bu uygulama • {version}" : installed ? $"Yüklü • {version}" : "Yüklü değil", 190, 20, 8, ContentAlignment.MiddleLeft, Muted);
+            var status = MakeLabel(current ? Strings.Format(Strings.CurrentApp, version) : installed ? Strings.Format(Strings.Installed, version) : Strings.NotInstalled, 190, 20, 8, ContentAlignment.MiddleLeft, Muted);
             status.Location = new Point(48, 24);
             row.Controls.Add(status);
             if (!installed)
             {
-                var link = MakeLink("… edin", $"https://github.com/taha-sa/{id}-releases/releases/latest");
-                link.SetBounds(270, 12, 80, 26);
+                var link = MakeLink(Strings.Format(Strings.GetNamedApp, name), $"https://github.com/taha-sa/{(id == "t-desk-viewer" ? "tdesk-viewer" : id)}-releases/releases/latest");
+                link.AutoSize = false;
+                link.SetBounds(218, 8, 140, 36);
                 link.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-                link.AccessibleName = name + " edin";
+                link.AccessibleName = Strings.Format(Strings.GetNamedApp, name);
                 row.Controls.Add(link);
             }
             body.Controls.Add(row);
         }
-        // No local license/privacy document: do not invent legal claims.
-        body.Controls.Add(MakeLabel("Tasarım & geliştirme: Taha Şaprak", 360, 28, 9, ContentAlignment.MiddleLeft, Muted));
+        body.Controls.Add(MakeButton(Strings.Legal, () => { using var legal = new LegalDialog(); legal.ShowDialog(this); }));
+        body.Controls.Add(MakeLabel(Strings.Credits, 360, 28, 9, ContentAlignment.MiddleLeft, Muted));
         var links = new FlowLayoutPanel { Width = 360, Height = 34 };
-        links.Controls.Add(MakeLink("Kaynak / lisans", "https://github.com/taha-sa/t-ramcash-releases"));
+        links.Controls.Add(MakeLink(Strings.SourceLicense, "https://github.com/taha-sa/t-ramcash-releases"));
         links.Controls.Add(MakeLink("@tdesk.studio", "https://www.instagram.com/tdesk.studio/"));
         body.Controls.Add(links);
         body.Layout += (_, _) => {
@@ -122,10 +127,18 @@ public class AboutForm : Form
         if (Width <= 0 || Height <= 0) return;
         int radius = (int)Math.Round(16 * DeviceDpi / 96f);
         var handle = CreateRoundRectRgn(0, 0, Width + 1, Height + 1, radius, radius);
+        if (handle == IntPtr.Zero) return;
         var old = Region;
         Region = Region.FromHrgn(handle);
         DeleteObject(handle);
         old?.Dispose();
+    }
+
+    Font TrackFont(float size)
+    {
+        var font = new Font("Segoe UI", size);
+        _fonts.Add(font);
+        return font;
     }
 
     Control Logo(string id, int size, int width)
@@ -135,10 +148,10 @@ public class AboutForm : Form
         return new PictureBox { Image = image, Width = width, Height = size, SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 0, 0, 4) };
     }
 
-    static Label MakeLabel(string text, int width, int height, float size,
+    Label MakeLabel(string text, int width, int height, float size,
         ContentAlignment alignment = ContentAlignment.MiddleLeft, Color? color = null)
         => new() { Text = text, Width = width, Height = height, ForeColor = color ?? TextColor,
-            TextAlign = alignment, Font = new Font("Segoe UI", size), Margin = Padding.Empty };
+            TextAlign = alignment, Font = TrackFont(size), Margin = Padding.Empty };
 
     static LinkLabel MakeLink(string text, string url)
     {
@@ -163,13 +176,18 @@ public class AboutForm : Form
 
     static void Open(string url)
     {
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
-        catch { }
+        LocalDialog.Open(null, url);
     }
 
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (disposing) foreach (var image in _images) image.Dispose();
+        if (disposing)
+        {
+            foreach (var image in _images) image.Dispose();
+            _images.Clear();
+            foreach (var font in _fonts) font.Dispose();
+            _fonts.Clear();
+        }
     }
 }

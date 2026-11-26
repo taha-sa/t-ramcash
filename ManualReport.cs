@@ -32,16 +32,8 @@ static class ManualReport
         var report = new CrashReport(Guid.NewGuid().ToString("N"), DateTime.UtcNow, TrayApp.AppId, "T-RamCash", TrayApp.Version,
             "taha-sa/t-ramcash-releases", RuntimeInformation.OSDescription, RuntimeInformation.FrameworkDescription,
             CultureInfo.CurrentCulture.Name, DateTime.UtcNow - process.StartTime.ToUniversalTime(),
-            new ExceptionDetails("Manual report", "Kullanıcı tarafından hazırlanan hata raporu", null, Array.Empty<ExceptionDetails>()), lines.ToArray());
-        using var dialog = new CrashReportDialog(report, TrayApp.Theme);
-        dialog.Text = dialog.AccessibleName = "Hata raporu gönder";
-        foreach (Control control in dialog.Controls)
-        {
-            if (control is Label label && label.Text == "Uygulama beklenmedik şekilde kapandı") label.Text = label.AccessibleName = "Hata raporu gönder";
-            else if (control is Label explanation && explanation.Text.StartsWith("İsterseniz"))
-                explanation.Text = "Raporu inceleyin. Raporu gönder düğmesi GitHub'da bir sorun taslağı açar.";
-            else if (control is CheckBox checkbox) checkbox.Visible = false;
-        }
+            new ExceptionDetails("Manual report", Strings.ManualReport, null, Array.Empty<ExceptionDetails>()), lines.ToArray());
+        using var dialog = new LocalReportDialog(report, manual: true);
         dialog.ShowDialog(owner);
     }
 }

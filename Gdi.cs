@@ -15,7 +15,7 @@ static class Gdi
     static int _refs;
     static readonly Dictionary<(string, float, FontStyle), Font> Fonts = new();
     static readonly Dictionary<int, SolidBrush> Brushes = new();
-    static readonly Dictionary<(int, float), Pen> Pens = new();
+    static readonly Dictionary<(int, float, bool), Pen> Pens = new();
     static readonly Dictionary<(int, int, int, int, int), GraphicsPath> Paths = new();
     static readonly Dictionary<(string, float, FontStyle, int), float> Fits = new();
     static StringFormat _center, _hCenter, _vCenterLeft, _topLeft;
@@ -75,10 +75,19 @@ static class Gdi
         return b;
     }
 
-    public static Pen GetPen(Color c, float width = 1f)
+    public static Pen GetPen(Color c, float width = 1f, bool round = false)
     {
-        var key = (c.ToArgb(), width);
-        if (!Pens.TryGetValue(key, out var p)) Pens[key] = p = new Pen(c, width);
+        var key = (c.ToArgb(), width, round);
+        if (!Pens.TryGetValue(key, out var p))
+        {
+            p = new Pen(c, width);
+            if (round)
+            {
+                p.StartCap = p.EndCap = LineCap.Round;
+                p.LineJoin = LineJoin.Round;
+            }
+            Pens[key] = p;
+        }
         return p;
     }
 

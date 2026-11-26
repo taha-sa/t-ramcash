@@ -257,12 +257,17 @@ public static class MemoryCleaner
     /// Tam: yukaridakilerin hepsi + sistem WS + modified list + tam standby + dosya onbellegi + registry reconciliation.
     /// Tam modda sistem duzeyi adimlar ayarlardaki isaretlere de saygi duyar.
     /// </summary>
+    static readonly object _cleanLock = new();
+
     public static CleanResult Clean(AppSettings settings, CleanMode mode)
     {
-        // SeDebugPrivilege en az ayricalik: yalniz Tam modda ve temizlik suresince acik, sonra geri alinir.
-        bool dbg = mode == CleanMode.Full && SetPrivilege("SeDebugPrivilege", true);
-        try { return CleanCore(settings, mode); }
-        finally { if (dbg) SetPrivilege("SeDebugPrivilege", false); }
+        lock (_cleanLock)
+        {
+            // SeDebugPrivilege en az ayricalik: yalniz Tam modda ve temizlik suresince acik, sonra geri alinir.
+            bool dbg = mode == CleanMode.Full && SetPrivilege("SeDebugPrivilege", true);
+            try { return CleanCore(settings, mode); }
+            finally { if (dbg) SetPrivilege("SeDebugPrivilege", false); }
+        }
     }
 
     static CleanResult CleanCore(AppSettings settings, CleanMode mode)
@@ -287,36 +292,36 @@ public static class MemoryCleaner
         }
 
         if (!full || settings.CleanProcessWorkingSets)
-            Step("Süreç çalışma kümeleri", () => { EmptyProcessWorkingSets(settings, full); return true; });
+            Step(Strings.ProcessSets, () => { EmptyProcessWorkingSets(settings, full); return true; });
 
         // NOT: NtSetSystemInformation(MemoryEmptyWorkingSets) bilerek KULLANILMIYOR: tüm süreçleri
         // dışlamaları yok sayarak boşaltır. Tam mod da dışlamalara saygı duyan süreç başına döngüyü kullanır.
 
         if (full && settings.CleanModifiedPageList)
-            Step("Değiştirilmiş sayfalar", () => NtMemCmd(MemoryCommand.FlushModifiedList));
+            Step(Strings.ModifiedPages, () => NtMemCmd(MemoryCommand.FlushModifiedList));
 
         if (full && settings.CleanStandbyList)
-            Step("Bekleme listesi", () => NtMemCmd(MemoryCommand.PurgeStandbyList));
+            Step(Strings.Standby, () => NtMemCmd(MemoryCommand.PurgeStandbyList));
 
         if (!full || settings.CleanStandbyLowPriority)
-            Step("Düşük öncelikli bekleme", () => NtMemCmd(MemoryCommand.PurgeLowPriorityStandbyList));
+            Step(Strings.LowPriority, () => NtMemCmd(MemoryCommand.PurgeLowPriorityStandbyList));
 
         if (full)
-            Step("Sistem dosya önbelleği", () => SetSystemFileCacheSize(UIntPtr.MaxValue, UIntPtr.MaxValue, 0));
+            Step(Strings.FileCache, () => SetSystemFileCacheSize(UIntPtr.MaxValue, UIntPtr.MaxValue, 0));
 
         if (Environment.OSVersion.Version.Build >= 9600) // Win 8.1+
-            Step("Sayfa birleştirme", CombinePageLists);
+            Step(Strings.CombinePages, CombinePageLists);
 
         if (full && Environment.OSVersion.Version.Build >= 17134) // Win10 1803+
-            Step("Registry önbelleği", () => NtSetSystemInformation(SystemRegistryReconciliationInformation, IntPtr.Zero, 0) >= 0);
+            Step(Strings.RegistryCache, () => NtSetSystemInformation(SystemRegistryReconciliationInformation, IntPtr.Zero, 0) >= 0);
 
         ulong after = AvailPhys();
         string note = null;
         int failed = steps.FindAll(x => !x.Ok).Count;
         if (full && (!admin || !privOk))
-            note = "Tam mod için yönetici gerekir: yalnızca kısmen temizlendi";
+            note = Strings.AdminRequired;
         else if (failed > 0)
-            note = $"{failed} adım başarısız: " + string.Join(", ", steps.FindAll(x => !x.Ok).ConvertAll(x => x.Name));
+            note = Strings.Format(Strings.FailedSteps, failed, string.Join(", ", steps.FindAll(x => !x.Ok).ConvertAll(x => x.Name)));
         return new CleanResult
         {
             FreedMb = Math.Max(0, ((long)after - (long)before) / 1048576.0),
@@ -341,40 +346,51 @@ public static class MemoryCleaner
     }
 
     /// <summary>Hic hariç tutulmayan sürecler: kendimiz, ön plan, T-Suite uygulamaları, ayardaki hariç listesi, PID &lt;= 4.</summary>
-    static HashSet<string>? _exCache;
-    static HashSet<uint>? _exPids;
+    static readonly object _exLock = new();
+    static HashSet<string> _exCache;
+    static HashSet<uint> _exPids;
     static long _exTick;
 
     /// <summary>Ayar kaydedilince cagrilir; bir sonraki temizlikte liste yeniden olusur.</summary>
-    public static void InvalidateExcludeCache() => _exCache = null;
+    public static void InvalidateExcludeCache()
+    {
+        lock (_exLock) { _exCache = null; _exPids = null; }
+    }
 
     static HashSet<string> BuildExcludedNames(AppSettings settings, out HashSet<uint> excludedPids)
     {
-        // Yavas kisimlar (manifestler, kullanici listesi) 30 sn onbellekte; on plan PID her temizlikte taze okunur.
-        if (_exCache == null || _exPids == null || Environment.TickCount64 - _exTick >= 30000)
+        HashSet<string> cachedNames;
+        HashSet<uint> cachedPids;
+        lock (_exLock)
         {
-            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var pids = new HashSet<uint> { (uint)Environment.ProcessId };
-
-            if (settings.ExcludedProcesses != null)
-                foreach (var n in settings.ExcludedProcesses) names.Add(NormalizeName(n));
-
-            try
+            // Yavas kisimlar (manifestler, kullanici listesi) 30 sn onbellekte; on plan PID her temizlikte taze okunur.
+            if (_exCache == null || _exPids == null || Environment.TickCount64 - _exTick >= 30000)
             {
-                foreach (var m in new AppRegistry().ReadAll())
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var pids = new HashSet<uint> { (uint)Environment.ProcessId };
+
+                if (settings.ExcludedProcesses != null)
+                    foreach (var n in settings.ExcludedProcesses) names.Add(NormalizeName(n));
+
+                try
                 {
-                    if (!string.IsNullOrEmpty(m.ExePath)) names.Add(Path.GetFileNameWithoutExtension(m.ExePath));
-                    if (m.Pid > 0) pids.Add((uint)m.Pid);
+                    foreach (var m in new AppRegistry().ReadAll())
+                    {
+                        if (!string.IsNullOrEmpty(m.ExePath)) names.Add(Path.GetFileNameWithoutExtension(m.ExePath));
+                        if (m.Pid > 0) pids.Add((uint)m.Pid);
+                    }
                 }
+                catch { }
+                _exCache = names;
+                _exPids = pids;
+                _exTick = Environment.TickCount64;
             }
-            catch { }
-            _exCache = names;
-            _exPids = pids;
-            _exTick = Environment.TickCount64;
+            cachedNames = _exCache;
+            cachedPids = _exPids;
         }
 
         // Onbellegi kirletmemek icin kopya; on plan PID her seferinde taze.
-        excludedPids = new HashSet<uint>(_exPids);
+        excludedPids = new HashSet<uint>(cachedPids);
         try
         {
             IntPtr fg = GetForegroundWindow();
@@ -382,7 +398,7 @@ public static class MemoryCleaner
                 excludedPids.Add(fgPid);
         }
         catch { }
-        return _exCache;
+        return cachedNames;
     }
 
     public static string NormalizeName(string n)

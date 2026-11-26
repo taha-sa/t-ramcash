@@ -9,6 +9,7 @@ namespace TRamCash;
 
 public class AppSettings
 {
+    public string Language { get; set; } = "";
     public bool CleanProcessWorkingSets { get; set; } = true;
     public bool CleanSystemWorkingSet { get; set; } = true;
     public bool CleanModifiedPageList { get; set; } = true;
@@ -64,8 +65,9 @@ public class AppSettings
                 var legacySettings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings);
                 if (legacySettings != null)
                 {
+                    Normalize(legacySettings);
                     legacySettings.Save(); // Yeni yola kaydet ve Registry'i güncelle
-                    return Normalize(legacySettings);
+                    return legacySettings;
                 }
             }
         }
@@ -76,8 +78,13 @@ public class AppSettings
         return new AppSettings();
     }
 
+    static readonly object _saveLock = new();
+
     static AppSettings Normalize(AppSettings s)
     {
+        s.Language ??= "";
+        s.ManualMode = s.ManualMode == "Full" ? "Full" : "Smart";
+        s.ExcludedProcesses ??= new();
         s.AutoCleanRatioThreshold = Math.Clamp(s.AutoCleanRatioThreshold, 10, 99);
         s.AutoCleanIntervalMinutes = Math.Clamp(s.AutoCleanIntervalMinutes, 1, 360);
         return s;
@@ -85,19 +92,25 @@ public class AppSettings
 
     public void Save()
     {
-        try
+        lock (_saveLock)
         {
-            if (!Directory.Exists(ConfigDir))
+            string tmp = null;
+            try
             {
-                Directory.CreateDirectory(ConfigDir);
+                if (!Directory.Exists(ConfigDir))
+                {
+                    Directory.CreateDirectory(ConfigDir);
+                }
+                string json = JsonSerializer.Serialize(this, SettingsJsonContext.Default.AppSettings);
+                tmp = Path.Combine(ConfigDir, $"settings.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(tmp, json);
+                File.Move(tmp, ConfigPath, true);
+                tmp = null;
             }
-            string json = JsonSerializer.Serialize(this, SettingsJsonContext.Default.AppSettings);
-            File.WriteAllText(ConfigPath + ".tmp", json);
-            File.Move(ConfigPath + ".tmp", ConfigPath, true);
-
-        }
-        catch
-        {
+            catch
+            {
+                if (tmp != null) { try { File.Delete(tmp); } catch { } }
+            }
         }
         ApplyStartupRegistration();
     }

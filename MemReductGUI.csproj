@@ -10,9 +10,9 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>T-RamCash</AssemblyName>
     <RootNamespace>TRamCash</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <NoWarn>$(NoWarn);WFO1000;CA1416</NoWarn>
-    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <SatelliteResourceLanguages>en;tr;de</SatelliteResourceLanguages>
 
     <!-- Bellek: workstation + non-concurrent GC (ek GC thread'i ve arka plan yigini yok), PGO acik -->
     <ServerGarbageCollector>false</ServerGarbageCollector>
@@ -24,6 +24,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <EmbeddedResource Remove="tests\**\*" />
+    <None Remove="tests\**\*" />
     <EmbeddedResource Include="Assets\*.png" />
     <Content Include="app.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -42,4 +45,17 @@
 
   <Import Project="$(TSuiteRoot)\build\TSuite.Updater.targets" />
 
+  <Target Name="CheckLocalizedResources" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\Check-Resources.ps1&quot;" />
+  </Target>
+
+
+  <ItemGroup>
+    <EmbeddedResource Include="LICENSE" LogicalName="Legal.LICENSE" />
+    <Content Include="LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="PRIVACY.md" LogicalName="Legal.PRIVACY.md" />
+    <Content Include="PRIVACY.md" Link="PRIVACY.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="THIRD-PARTY-NOTICES.md" LogicalName="Legal.THIRD-PARTY-NOTICES.md" />
+    <Content Include="THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

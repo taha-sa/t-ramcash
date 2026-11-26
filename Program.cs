@@ -10,12 +10,13 @@ static class Program
     [DllImport("shell32.dll", SetLastError = true)]
     static extern void SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
 
-    const string MutexName = @"Global\TRamCash_SingleInstance_Mutex_998877";
+    const string MutexName = @"Local\TRamCash_SingleInstance_Mutex_998877";
     const string ShowEventName = @"Local\TRamCash_ShowWindow_998877";
 
     [STAThread]
     static void Main(string[] args)
     {
+        Localization.Apply(AppSettings.Load().Language);
         // Test kancasi: `--dpi N` yerlesim dogrulamasi (arayuz yok); sonuc TEMP ramcash-dpi-test.txt. N yoksa 96/120/144/168.
         if (args.Length > 0 && args[0] == "--dpi")
         {
@@ -49,7 +50,8 @@ static class Program
         // T-Bridge "Hepsini güncelle": kapalıyken `--update` ile başlatılır -> kontrol, indirme, yardımcıyı başlat, çık (arayüz yok).
         if (TSuite.Update.UpdateCli.IsRequested(args))
         {
-            Environment.ExitCode = TSuite.Update.UpdateCli.RunAsync(TrayApp.MakeUpdateOptions()).GetAwaiter().GetResult();
+            try { Environment.ExitCode = TSuite.Update.UpdateCli.RunAsync(TrayApp.MakeUpdateOptions()).GetAwaiter().GetResult(); }
+            catch { Environment.ExitCode = 1; }
             return;
         }
 
@@ -69,6 +71,7 @@ static class Program
         TSuite.Diagnostics.CrashReporter.Install(TrayApp.AppId, "T-RamCash", TrayApp.Version, "taha-sa/t-ramcash-releases", TrayApp.Theme);
         TSuite.Diagnostics.CrashReporter.InstallWinForms();
         TSuite.Diagnostics.Log.Info("Application starting");
-        Application.Run(new TrayApp(showEvent, startInTray));
+        using var app = new TrayApp(showEvent, startInTray);
+        Application.Run(app);
     }
 }

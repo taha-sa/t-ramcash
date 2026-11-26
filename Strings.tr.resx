@@ -1,0 +1,409 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <data name="Settings" xml:space="preserve">
+    <value>Ayarlar</value>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>Ayarlar ve tercihler</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>Genel</value>
+  </data>
+  <data name="AlwaysOnTop" xml:space="preserve">
+    <value>Her zaman en üstte göster</value>
+  </data>
+  <data name="StartWindows" xml:space="preserve">
+    <value>Windows ile başlat</value>
+  </data>
+  <data name="StartTray" xml:space="preserve">
+    <value>Sistem tepsisinde küçültülmüş başlat</value>
+  </data>
+  <data name="NotifyClean" xml:space="preserve">
+    <value>Temizlik sonuç bildirim balonunu göster</value>
+  </data>
+  <data name="NotifyAuto" xml:space="preserve">
+    <value>Otomatik temizlikte de bildirim göster (varsayılan sessiz)</value>
+  </data>
+  <data name="PrepareReports" xml:space="preserve">
+    <value>Hata raporlarını otomatik hazırla</value>
+  </data>
+  <data name="SendReport" xml:space="preserve">
+    <value>Hata raporu gönder…</value>
+  </data>
+  <data name="CheckUpdates" xml:space="preserve">
+    <value>Güncellemeleri denetle</value>
+  </data>
+  <data name="CleanAreas" xml:space="preserve">
+    <value>Temizleme alanları</value>
+  </data>
+  <data name="WorkingSets" xml:space="preserve">
+    <value>Süreç çalışma kümeleri (Working Sets)</value>
+  </data>
+  <data name="SystemWorkingSet" xml:space="preserve">
+    <value>Sistem çalışma kümesi (kaldırıldı: dışlamaları yok sayıyordu)</value>
+  </data>
+  <data name="ModifiedList" xml:space="preserve">
+    <value>Değiştirilmiş sayfa listesi (Modified List)</value>
+  </data>
+  <data name="StandbyList" xml:space="preserve">
+    <value>Bekleme listesi (Standby List / RAM Cache)</value>
+  </data>
+  <data name="LowStandby" xml:space="preserve">
+    <value>Düşük öncelikli bekleme listesi</value>
+  </data>
+  <data name="Automation" xml:space="preserve">
+    <value>Otomasyon kuralları</value>
+  </data>
+  <data name="RatioRule" xml:space="preserve">
+    <value>Kullanım şu oranı aşınca temizle (%):</value>
+  </data>
+  <data name="IntervalRule" xml:space="preserve">
+    <value>Belirli aralıklarla temizle (dakika):</value>
+  </data>
+  <data name="AutoMode" xml:space="preserve">
+    <value>Otomatik temizleme modu: Akıllı</value>
+  </data>
+  <data name="AutoHelp" xml:space="preserve">
+    <value>Otomatik temizlik her zaman Akıllı modda çalışır: ön plan uygulaması korunur, değiştirilmiş sayfalar ve dosya önbelleğine dokunulmaz. Tam mod yalnızca elle çalıştırılır.</value>
+  </data>
+  <data name="Exclusions" xml:space="preserve">
+    <value>Hariç tutulanlar</value>
+  </data>
+  <data name="ExclusionHelp" xml:space="preserve">
+    <value>Bu süreçlerin belleği temizlenmez. Ön plandaki uygulama, T-RamCash ve diğer T-Suite uygulamaları her zaman hariç tutulur.</value>
+  </data>
+  <data name="AddRunning" xml:space="preserve">
+    <value>Çalışan süreçlerden ekle…</value>
+  </data>
+  <data name="Remove" xml:space="preserve">
+    <value>Kaldır</value>
+  </data>
+  <data name="SaveClose" xml:space="preserve">
+    <value>Kaydet ve kapat</value>
+  </data>
+  <data name="PickProcess" xml:space="preserve">
+    <value>Süreç seç</value>
+  </data>
+  <data name="RunningProcesses" xml:space="preserve">
+    <value>Çalışan süreçler</value>
+  </data>
+  <data name="Add" xml:space="preserve">
+    <value>Ekle</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>İptal</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Kapat</value>
+  </data>
+  <data name="About" xml:space="preserve">
+    <value>Hakkında</value>
+  </data>
+  <data name="AboutTitle" xml:space="preserve">
+    <value>T-RamCash • Hakkında</value>
+  </data>
+  <data name="ReportIssue" xml:space="preserve">
+    <value>Sorun bildir</value>
+  </data>
+  <data name="CopyDiagnostics" xml:space="preserve">
+    <value>Tanıyı kopyala</value>
+  </data>
+  <data name="Running" xml:space="preserve">
+    <value>● Çalışıyor</value>
+  </data>
+  <data name="SuiteFamily" xml:space="preserve">
+    <value>T-Suite ailesinin parçası</value>
+  </data>
+  <data name="NotInstalled" xml:space="preserve">
+    <value>Yüklü değil</value>
+  </data>
+  <data name="GetApp" xml:space="preserve">
+    <value>… edin</value>
+  </data>
+  <data name="Credits" xml:space="preserve">
+    <value>Tasarım &amp; geliştirme: Taha Şaprak</value>
+  </data>
+  <data name="SourceLicense" xml:space="preserve">
+    <value>Kaynak / lisans</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Sistem izleniyor • Hazır</value>
+  </data>
+  <data name="ToggleWindow" xml:space="preserve">
+    <value>Pencereyi göster / gizle</value>
+  </data>
+  <data name="CleanSmart" xml:space="preserve">
+    <value>Akıllı temizle</value>
+  </data>
+  <data name="CleanDeep" xml:space="preserve">
+    <value>Tam temizle</value>
+  </data>
+  <data name="TaskManager" xml:space="preserve">
+    <value>Görev Yöneticisi</value>
+  </data>
+  <data name="SettingsMenu" xml:space="preserve">
+    <value>Ayarlar...</value>
+  </data>
+  <data name="AboutMenu" xml:space="preserve">
+    <value>Hakkında...</value>
+  </data>
+  <data name="RestartAdmin" xml:space="preserve">
+    <value>Yönetici olarak yeniden başlat</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>Çıkış</value>
+  </data>
+  <data name="CleaningStatus" xml:space="preserve">
+    <value>Temizleniyor...</value>
+  </data>
+  <data name="Cleaning" xml:space="preserve">
+    <value>Temizleniyor…</value>
+  </data>
+  <data name="CleanFailed" xml:space="preserve">
+    <value>Temizlik tamamlanamadı. Yönetici olarak tekrar deneyin.</value>
+  </data>
+  <data name="NoMemory" xml:space="preserve">
+    <value>Boşaltılacak bellek bulunamadı</value>
+  </data>
+  <data name="PhysicalMemory" xml:space="preserve">
+    <value>Fiziksel bellek</value>
+  </data>
+  <data name="VirtualCache" xml:space="preserve">
+    <value>Sanal bellek ve önbellek</value>
+  </data>
+  <data name="AdminMode" xml:space="preserve">
+    <value>● Yönetici modu</value>
+  </data>
+  <data name="StandardMode" xml:space="preserve">
+    <value>○ Standart mod</value>
+  </data>
+  <data name="FullPermission" xml:space="preserve">
+    <value>Tam önbellek yetkili</value>
+  </data>
+  <data name="NeedAdmin" xml:space="preserve">
+    <value>Yönetici ile tam yetki</value>
+  </data>
+  <data name="AdminLink" xml:space="preserve">
+    <value>▸ Yönetici olarak yeniden başlat</value>
+  </data>
+  <data name="Hotkey" xml:space="preserve">
+    <value>Kısayol: Ctrl + F1</value>
+  </data>
+  <data name="HotkeyBusy" xml:space="preserve">
+    <value>Kısayol başka bir uygulama tarafından kullanılıyor. Kısayolu kullanan uygulamayı kapatıp tekrar deneyin.</value>
+  </data>
+  <data name="Smart" xml:space="preserve">
+    <value>Akıllı</value>
+  </data>
+  <data name="Deep" xml:space="preserve">
+    <value>Tam</value>
+  </data>
+  <data name="CleanNow" xml:space="preserve">
+    <value>Şimdi temizle</value>
+  </data>
+  <data name="HideWindow" xml:space="preserve">
+    <value>Pencereyi gizle</value>
+  </data>
+  <data name="MinimizeTray" xml:space="preserve">
+    <value>Tepsiye küçült</value>
+  </data>
+  <data name="ModeHelpName" xml:space="preserve">
+    <value>Akıllı ve Tam mod açıklaması</value>
+  </data>
+  <data name="SmartMode" xml:space="preserve">
+    <value>Akıllı mod</value>
+  </data>
+  <data name="DeepMode" xml:space="preserve">
+    <value>Tam mod</value>
+  </data>
+  <data name="CleanMemory" xml:space="preserve">
+    <value>Belleği temizle</value>
+  </data>
+  <data name="Activate" xml:space="preserve">
+    <value>Etkinleştir</value>
+  </data>
+  <data name="ProcessSets" xml:space="preserve">
+    <value>Süreç çalışma kümeleri</value>
+  </data>
+  <data name="ModifiedPages" xml:space="preserve">
+    <value>Değiştirilmiş sayfalar</value>
+  </data>
+  <data name="Standby" xml:space="preserve">
+    <value>Bekleme listesi</value>
+  </data>
+  <data name="LowPriority" xml:space="preserve">
+    <value>Düşük öncelikli bekleme</value>
+  </data>
+  <data name="FileCache" xml:space="preserve">
+    <value>Sistem dosya önbelleği</value>
+  </data>
+  <data name="CombinePages" xml:space="preserve">
+    <value>Sayfa birleştirme</value>
+  </data>
+  <data name="RegistryCache" xml:space="preserve">
+    <value>Registry önbelleği</value>
+  </data>
+  <data name="AdminRequired" xml:space="preserve">
+    <value>Sistem önbelleği boşaltılamadı çünkü işlem yönetici yetkisi gerektiriyor. T-RamCash uygulamasını yönetici olarak yeniden başlatın.</value>
+  </data>
+  <data name="UpdateCheckFailed" xml:space="preserve">
+    <value>Güncellemeler denetlenemedi. Ağ bağlantınızı kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="UpToDate" xml:space="preserve">
+    <value>En güncel sürümü kullanıyorsunuz.</value>
+  </data>
+  <data name="ModeHelp" xml:space="preserve">
+    <value>Akıllı: Arka plandaki uygulamaların gereksiz belleğini boşaltır, açık işinize dokunmaz (önerilen).
+
+Tam: Önbellek dahil her şeyi boşaltır; yönetici izni gerekir, kısa süre yavaşlık olabilir.</value>
+  </data>
+  <data name="MemoryPair" xml:space="preserve">
+    <value>{0:F1} GB / {1:F1} GB</value>
+  </data>
+  <data name="Available" xml:space="preserve">
+    <value>Kullanılabilir: {0:F1} GB</value>
+  </data>
+  <data name="CacheSize" xml:space="preserve">
+    <value>Sistem önbelleği: {0:N0} MB</value>
+  </data>
+  <data name="StatusProcesses" xml:space="preserve">
+    <value>● {0} · {1:N0} etkin süreç</value>
+  </data>
+  <data name="FreedGb" xml:space="preserve">
+    <value>+{0:F1} GB boşaltıldı</value>
+  </data>
+  <data name="FreedMb" xml:space="preserve">
+    <value>+{0:N0} MB boşaltıldı</value>
+  </data>
+  <data name="FreedStatus" xml:space="preserve">
+    <value>{0:F1} MB boşaltıldı</value>
+  </data>
+  <data name="FreedBalloon" xml:space="preserve">
+    <value>Bellek temizlendi.
+{0:F1} MB RAM boşaltıldı.</value>
+  </data>
+  <data name="FreedWarning" xml:space="preserve">
+    <value>{0}
+{1:F1} MB boşaltıldı.</value>
+  </data>
+  <data name="ToastResult" xml:space="preserve">
+    <value>{0} · {1} · {2:N0} ms</value>
+  </data>
+  <data name="FailedSteps" xml:space="preserve">
+    <value>{0:N0} adım başarısız: {1}. Yönetici olarak tekrar deneyin.</value>
+  </data>
+  <data name="VersionInfo" xml:space="preserve">
+    <value>Sürüm {0} • {1}</value>
+  </data>
+  <data name="CurrentApp" xml:space="preserve">
+    <value>Bu uygulama • {0}</value>
+  </data>
+  <data name="Installed" xml:space="preserve">
+    <value>Yüklü • {0}</value>
+  </data>
+  <data name="GetNamedApp" xml:space="preserve">
+    <value>{0} uygulamasını edinin</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>Dil</value>
+  </data>
+  <data name="SystemLanguage" xml:space="preserve">
+    <value>Sistem dili (varsayılan)</value>
+  </data>
+  <data name="Turkish" xml:space="preserve">
+    <value>Türkçe</value>
+  </data>
+  <data name="English" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="German" xml:space="preserve">
+    <value>Deutsch</value>
+  </data>
+  <data name="RestartLanguage" xml:space="preserve">
+    <value>Dil tercihiniz kaydedildi. Yeni dili uygulamak için T-RamCash uygulamasını yeniden başlatın.</value>
+  </data>
+  <data name="BridgeLine" xml:space="preserve">
+    <value>RAM durumunu telefonunuzdan izleyin — T-Bridge ile.</value>
+  </data>
+  <data name="BridgeTitle" xml:space="preserve">
+    <value>RAM durumu telefonunuzda</value>
+  </data>
+  <data name="GetBridge" xml:space="preserve">
+    <value>T-Bridge'i edinin</value>
+  </data>
+  <data name="OpenBridge" xml:space="preserve">
+    <value>T-Bridge ile açın</value>
+  </data>
+  <data name="LaunchFailed" xml:space="preserve">
+    <value>Uygulama veya bağlantı açılamadı. Kurulumunuzu ve varsayılan tarayıcınızı kontrol edip tekrar deneyin.</value>
+  </data>
+  <data name="ReportTitle" xml:space="preserve">
+    <value>Hata raporu gönder</value>
+  </data>
+  <data name="CrashTitle" xml:space="preserve">
+    <value>Kilitlenme tespit edildi</value>
+  </data>
+  <data name="ReportHelp" xml:space="preserve">
+    <value>Raporu inceleyin. Gönder düğmesi GitHub'da herkese açık bir sorun taslağı açar; kişisel bilgiler maskelenmiştir.</value>
+  </data>
+  <data name="ReportPreview" xml:space="preserve">
+    <value>Rapor önizleme</value>
+  </data>
+  <data name="Copy" xml:space="preserve">
+    <value>Kopyala</value>
+  </data>
+  <data name="ReportCopied" xml:space="preserve">
+    <value>Rapor kopyalandı.</value>
+  </data>
+  <data name="ActionFailed" xml:space="preserve">
+    <value>İşlem tamamlanamadı. Tekrar deneyin.</value>
+  </data>
+  <data name="ManualReport" xml:space="preserve">
+    <value>Kullanıcı tarafından hazırlanan hata raporu</value>
+  </data>
+  <data name="UpdateTitle" xml:space="preserve">
+    <value>Yeni sürüm mevcut</value>
+  </data>
+  <data name="UpdateNow" xml:space="preserve">
+    <value>Şimdi güncelle</value>
+  </data>
+  <data name="Later" xml:space="preserve">
+    <value>Sonra</value>
+  </data>
+  <data name="SkipVersion" xml:space="preserve">
+    <value>Bu sürümü atla</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>Tekrar dene</value>
+  </data>
+  <data name="Downloading" xml:space="preserve">
+    <value>İndiriliyor: {0:P0}</value>
+  </data>
+  <data name="Installing" xml:space="preserve">
+    <value>Yükleniyor</value>
+  </data>
+  <data name="UpdateFailed" xml:space="preserve">
+    <value>Güncelleme başarısız. Ağ bağlantınızı kontrol edin ve tekrar deneyin.</value>
+  </data>
+  <data name="RequiredUpdate" xml:space="preserve">
+    <value>Bu sürüm artık desteklenmiyor. Devam etmek için güncelleyin.</value>
+  </data>
+  <data name="Legal" xml:space="preserve">
+    <value>Yasal</value>
+  </data>
+  <data name="Privacy" xml:space="preserve">
+    <value>Gizlilik politikası</value>
+  </data>
+  <data name="License" xml:space="preserve">
+    <value>Lisans</value>
+  </data>
+  <data name="Notices" xml:space="preserve">
+    <value>Açık kaynak bildirimleri</value>
+  </data>
+</root>

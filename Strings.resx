@@ -1,0 +1,409 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <data name="Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="SettingsTitle" xml:space="preserve">
+    <value>Settings and preferences</value>
+  </data>
+  <data name="General" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="AlwaysOnTop" xml:space="preserve">
+    <value>Always on top</value>
+  </data>
+  <data name="StartWindows" xml:space="preserve">
+    <value>Start with Windows</value>
+  </data>
+  <data name="StartTray" xml:space="preserve">
+    <value>Start minimized to system tray</value>
+  </data>
+  <data name="NotifyClean" xml:space="preserve">
+    <value>Show cleaning notifications</value>
+  </data>
+  <data name="NotifyAuto" xml:space="preserve">
+    <value>Notify after auto clean</value>
+  </data>
+  <data name="PrepareReports" xml:space="preserve">
+    <value>Prepare error reports automatically</value>
+  </data>
+  <data name="SendReport" xml:space="preserve">
+    <value>Send error report</value>
+  </data>
+  <data name="CheckUpdates" xml:space="preserve">
+    <value>Check for updates</value>
+  </data>
+  <data name="CleanAreas" xml:space="preserve">
+    <value>Cleaning areas</value>
+  </data>
+  <data name="WorkingSets" xml:space="preserve">
+    <value>Process working sets</value>
+  </data>
+  <data name="SystemWorkingSet" xml:space="preserve">
+    <value>System working set (removed: ignored exclusions)</value>
+  </data>
+  <data name="ModifiedList" xml:space="preserve">
+    <value>Modified page list</value>
+  </data>
+  <data name="StandbyList" xml:space="preserve">
+    <value>Standby list / RAM cache</value>
+  </data>
+  <data name="LowStandby" xml:space="preserve">
+    <value>Low-priority standby list</value>
+  </data>
+  <data name="Automation" xml:space="preserve">
+    <value>Automation rules</value>
+  </data>
+  <data name="RatioRule" xml:space="preserve">
+    <value>Clean above usage (%):</value>
+  </data>
+  <data name="IntervalRule" xml:space="preserve">
+    <value>Clean at intervals (minutes):</value>
+  </data>
+  <data name="AutoMode" xml:space="preserve">
+    <value>Auto clean mode: Smart</value>
+  </data>
+  <data name="AutoHelp" xml:space="preserve">
+    <value>Auto clean always uses Smart mode: your foreground app is protected, modified pages and file cache are preserved. Deep mode runs manually.</value>
+  </data>
+  <data name="Exclusions" xml:space="preserve">
+    <value>Exclusions</value>
+  </data>
+  <data name="ExclusionHelp" xml:space="preserve">
+    <value>These processes are excluded from cleaning. Your foreground app, T-RamCash and other T-Suite apps are always excluded.</value>
+  </data>
+  <data name="AddRunning" xml:space="preserve">
+    <value>Add running process</value>
+  </data>
+  <data name="Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="SaveClose" xml:space="preserve">
+    <value>Save and close</value>
+  </data>
+  <data name="PickProcess" xml:space="preserve">
+    <value>Select process</value>
+  </data>
+  <data name="RunningProcesses" xml:space="preserve">
+    <value>Running processes</value>
+  </data>
+  <data name="Add" xml:space="preserve">
+    <value>Add</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="About" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="AboutTitle" xml:space="preserve">
+    <value>T-RamCash • About</value>
+  </data>
+  <data name="ReportIssue" xml:space="preserve">
+    <value>Report issue</value>
+  </data>
+  <data name="CopyDiagnostics" xml:space="preserve">
+    <value>Copy diagnostics</value>
+  </data>
+  <data name="Running" xml:space="preserve">
+    <value>● Running</value>
+  </data>
+  <data name="SuiteFamily" xml:space="preserve">
+    <value>Part of T-Suite</value>
+  </data>
+  <data name="NotInstalled" xml:space="preserve">
+    <value>Not installed</value>
+  </data>
+  <data name="GetApp" xml:space="preserve">
+    <value>Get app</value>
+  </data>
+  <data name="Credits" xml:space="preserve">
+    <value>Design and development: Taha Şaprak</value>
+  </data>
+  <data name="SourceLicense" xml:space="preserve">
+    <value>Source / license</value>
+  </data>
+  <data name="Ready" xml:space="preserve">
+    <value>Monitoring system • Ready</value>
+  </data>
+  <data name="ToggleWindow" xml:space="preserve">
+    <value>Show / hide window</value>
+  </data>
+  <data name="CleanSmart" xml:space="preserve">
+    <value>Clean in Smart mode</value>
+  </data>
+  <data name="CleanDeep" xml:space="preserve">
+    <value>Clean in Deep mode</value>
+  </data>
+  <data name="TaskManager" xml:space="preserve">
+    <value>Open Task Manager</value>
+  </data>
+  <data name="SettingsMenu" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="AboutMenu" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="RestartAdmin" xml:space="preserve">
+    <value>Restart as administrator</value>
+  </data>
+  <data name="Exit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
+  <data name="CleaningStatus" xml:space="preserve">
+    <value>Cleaning…</value>
+  </data>
+  <data name="Cleaning" xml:space="preserve">
+    <value>Cleaning…</value>
+  </data>
+  <data name="CleanFailed" xml:space="preserve">
+    <value>Cleaning failed. Try again as administrator.</value>
+  </data>
+  <data name="NoMemory" xml:space="preserve">
+    <value>No memory to clear</value>
+  </data>
+  <data name="PhysicalMemory" xml:space="preserve">
+    <value>Physical memory</value>
+  </data>
+  <data name="VirtualCache" xml:space="preserve">
+    <value>Virtual memory and cache</value>
+  </data>
+  <data name="AdminMode" xml:space="preserve">
+    <value>● Administrator mode</value>
+  </data>
+  <data name="StandardMode" xml:space="preserve">
+    <value>○ Standard mode</value>
+  </data>
+  <data name="FullPermission" xml:space="preserve">
+    <value>Full cache access</value>
+  </data>
+  <data name="NeedAdmin" xml:space="preserve">
+    <value>Administrator access needed</value>
+  </data>
+  <data name="AdminLink" xml:space="preserve">
+    <value>▸ Restart as administrator</value>
+  </data>
+  <data name="Hotkey" xml:space="preserve">
+    <value>Shortcut: Ctrl + F1</value>
+  </data>
+  <data name="HotkeyBusy" xml:space="preserve">
+    <value>Shortcut unavailable. Close the other app using it.</value>
+  </data>
+  <data name="Smart" xml:space="preserve">
+    <value>Smart</value>
+  </data>
+  <data name="Deep" xml:space="preserve">
+    <value>Deep</value>
+  </data>
+  <data name="CleanNow" xml:space="preserve">
+    <value>Clean now</value>
+  </data>
+  <data name="HideWindow" xml:space="preserve">
+    <value>Hide window</value>
+  </data>
+  <data name="MinimizeTray" xml:space="preserve">
+    <value>Minimize to system tray</value>
+  </data>
+  <data name="ModeHelpName" xml:space="preserve">
+    <value>Explain Smart and Deep modes</value>
+  </data>
+  <data name="SmartMode" xml:space="preserve">
+    <value>Smart mode</value>
+  </data>
+  <data name="DeepMode" xml:space="preserve">
+    <value>Deep mode</value>
+  </data>
+  <data name="CleanMemory" xml:space="preserve">
+    <value>Clean memory</value>
+  </data>
+  <data name="Activate" xml:space="preserve">
+    <value>Activate</value>
+  </data>
+  <data name="ProcessSets" xml:space="preserve">
+    <value>Process working sets</value>
+  </data>
+  <data name="ModifiedPages" xml:space="preserve">
+    <value>Modified pages</value>
+  </data>
+  <data name="Standby" xml:space="preserve">
+    <value>Standby list</value>
+  </data>
+  <data name="LowPriority" xml:space="preserve">
+    <value>Low-priority standby</value>
+  </data>
+  <data name="FileCache" xml:space="preserve">
+    <value>System file cache</value>
+  </data>
+  <data name="CombinePages" xml:space="preserve">
+    <value>Page combining</value>
+  </data>
+  <data name="RegistryCache" xml:space="preserve">
+    <value>Registry cache</value>
+  </data>
+  <data name="AdminRequired" xml:space="preserve">
+    <value>Could not clear system cache because administrator privileges are required. Restart T-RamCash as administrator.</value>
+  </data>
+  <data name="UpdateCheckFailed" xml:space="preserve">
+    <value>Could not check for updates. Check your network connection and try again.</value>
+  </data>
+  <data name="UpToDate" xml:space="preserve">
+    <value>You are using the latest version.</value>
+  </data>
+  <data name="ModeHelp" xml:space="preserve">
+    <value>Smart: Clears unused memory from background apps and protects your current work (recommended).
+
+Deep: Clears caches too; requires administrator access and may briefly slow your PC.</value>
+  </data>
+  <data name="MemoryPair" xml:space="preserve">
+    <value>{0:F1} GB / {1:F1} GB</value>
+  </data>
+  <data name="Available" xml:space="preserve">
+    <value>Available: {0:F1} GB</value>
+  </data>
+  <data name="CacheSize" xml:space="preserve">
+    <value>System cache: {0:N0} MB</value>
+  </data>
+  <data name="StatusProcesses" xml:space="preserve">
+    <value>● {0} · {1:N0} active processes</value>
+  </data>
+  <data name="FreedGb" xml:space="preserve">
+    <value>+{0:F1} GB cleared</value>
+  </data>
+  <data name="FreedMb" xml:space="preserve">
+    <value>+{0:N0} MB cleared</value>
+  </data>
+  <data name="FreedStatus" xml:space="preserve">
+    <value>{0:F1} MB cleared</value>
+  </data>
+  <data name="FreedBalloon" xml:space="preserve">
+    <value>Memory cleaned.
+{0:F1} MB RAM cleared.</value>
+  </data>
+  <data name="FreedWarning" xml:space="preserve">
+    <value>{0}
+{1:F1} MB cleared.</value>
+  </data>
+  <data name="ToastResult" xml:space="preserve">
+    <value>{0} · {1} · {2:N0} ms</value>
+  </data>
+  <data name="FailedSteps" xml:space="preserve">
+    <value>{0:N0} steps failed: {1}. Try again as administrator.</value>
+  </data>
+  <data name="VersionInfo" xml:space="preserve">
+    <value>Version {0} • {1}</value>
+  </data>
+  <data name="CurrentApp" xml:space="preserve">
+    <value>This app • {0}</value>
+  </data>
+  <data name="Installed" xml:space="preserve">
+    <value>Installed • {0}</value>
+  </data>
+  <data name="GetNamedApp" xml:space="preserve">
+    <value>Get {0}</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="SystemLanguage" xml:space="preserve">
+    <value>System language (default)</value>
+  </data>
+  <data name="Turkish" xml:space="preserve">
+    <value>Türkçe</value>
+  </data>
+  <data name="English" xml:space="preserve">
+    <value>English</value>
+  </data>
+  <data name="German" xml:space="preserve">
+    <value>Deutsch</value>
+  </data>
+  <data name="RestartLanguage" xml:space="preserve">
+    <value>Your language preference was saved. Restart T-RamCash to apply the new language.</value>
+  </data>
+  <data name="BridgeLine" xml:space="preserve">
+    <value>Monitor RAM from your phone — with T-Bridge.</value>
+  </data>
+  <data name="BridgeTitle" xml:space="preserve">
+    <value>RAM status on your phone</value>
+  </data>
+  <data name="GetBridge" xml:space="preserve">
+    <value>Get T-Bridge</value>
+  </data>
+  <data name="OpenBridge" xml:space="preserve">
+    <value>Open with T-Bridge</value>
+  </data>
+  <data name="LaunchFailed" xml:space="preserve">
+    <value>Could not open the app or link. Check your installation and default browser and try again.</value>
+  </data>
+  <data name="ReportTitle" xml:space="preserve">
+    <value>Send error report</value>
+  </data>
+  <data name="CrashTitle" xml:space="preserve">
+    <value>Crash detected</value>
+  </data>
+  <data name="ReportHelp" xml:space="preserve">
+    <value>Review the report. Send opens a public GitHub issue draft; personal data is masked.</value>
+  </data>
+  <data name="ReportPreview" xml:space="preserve">
+    <value>Preview report</value>
+  </data>
+  <data name="Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="ReportCopied" xml:space="preserve">
+    <value>Report copied.</value>
+  </data>
+  <data name="ActionFailed" xml:space="preserve">
+    <value>Could not complete the action. Try again.</value>
+  </data>
+  <data name="ManualReport" xml:space="preserve">
+    <value>User-prepared error report</value>
+  </data>
+  <data name="UpdateTitle" xml:space="preserve">
+    <value>New version available</value>
+  </data>
+  <data name="UpdateNow" xml:space="preserve">
+    <value>Update now</value>
+  </data>
+  <data name="Later" xml:space="preserve">
+    <value>Later</value>
+  </data>
+  <data name="SkipVersion" xml:space="preserve">
+    <value>Skip this version</value>
+  </data>
+  <data name="Retry" xml:space="preserve">
+    <value>Try again</value>
+  </data>
+  <data name="Downloading" xml:space="preserve">
+    <value>Downloading: {0:P0}</value>
+  </data>
+  <data name="Installing" xml:space="preserve">
+    <value>Installing</value>
+  </data>
+  <data name="UpdateFailed" xml:space="preserve">
+    <value>Update failed. Check your network connection and try again.</value>
+  </data>
+  <data name="RequiredUpdate" xml:space="preserve">
+    <value>This version is no longer supported. Update to continue.</value>
+  </data>
+  <data name="Legal" xml:space="preserve">
+    <value>Legal</value>
+  </data>
+  <data name="Privacy" xml:space="preserve">
+    <value>Privacy policy</value>
+  </data>
+  <data name="License" xml:space="preserve">
+    <value>License</value>
+  </data>
+  <data name="Notices" xml:space="preserve">
+    <value>Open-source notices</value>
+  </data>
+</root>
